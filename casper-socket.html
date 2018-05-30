@@ -61,7 +61,8 @@ websocket client for casper server
           /** Tube prefix */
           tubePrefix: {
             type: String,
-            value: 'casper'
+            value: 'casper',
+            observer: '_onTubePrefixChanged'
           },
           cookieDomain: {
             type: String,
@@ -86,14 +87,18 @@ websocket client for casper server
         this.path = this.path || 'epaper';
         this._cookieParser   = new RegExp('.*casper-session=([0-9a-zA-Z]+)');
 
-        this._loginQueue           = this.tubePrefix + '-login'; 
-        this._switchEntityQueue    = this.tubePrefix + '-switch-entity'; 
-        this._switchSubEntityQueue = this.tubePrefix + '-switch-subentity'; 
-        this._logoutQueue          = this.tubePrefix + '-logout';
+        if ( this.cookieDomain === undefined ) {
+          let domain = window.location.hostname.split('.');
+          if (domain.length >= 3 ) {
+            domain.shift();
+          }
+          this.cookieDomain = domain.join('.');
+        }
       }
 
       connectedCallback () {
         this._initData();
+        this._silentDisconnect = false;
         this._socket = undefined;
       }
 
@@ -120,8 +125,10 @@ websocket client for casper server
         }.bind(this);
 
         this._socket.onclose = function (message) {
-          console.log("*** Disconncted ", message);
-          this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} } ));
+          if ( this._silentDisconnect !== true ) {
+            this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} } ));
+          }
+          this._silentDisconnect = false;
           this._socket = undefined; 
         }.bind(this);
       }
@@ -216,6 +223,7 @@ websocket client for casper server
             if ( notification.response.refresh_token ) {
               window.localStorage.setItem('casper-refresh-token', notification.response.refresh_token);       
             }
+            this._silentDisconnect = true;
             this.disconnect();
             window.location = notification.response.url;
           } else if ( notification.status === 'error' ) {
@@ -757,6 +765,16 @@ websocket client for casper server
         this._nextInvokeId   = 1;          // The next fresh invoke ID
         this._ivk2tid        = new Map();  // hash key is invoke value the timer id
         this._channel2ivk    = new Map();  // hash key is channel value is the invoke 
+      }
+
+      /**
+       * Observer to initialize the beanstalkd tube names
+       */
+      _onTubePrefixChanged () {
+        this._loginQueue           = this.tubePrefix + '-login'; 
+        this._switchEntityQueue    = this.tubePrefix + '-switch-entity'; 
+        this._switchSubEntityQueue = this.tubePrefix + '-switch-subentity'; 
+        this._logoutQueue          = this.tubePrefix + '-logout';
       }
 
       /**
