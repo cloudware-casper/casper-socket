@@ -163,18 +163,18 @@ websocket client for casper server
         this._send(ivk + ':PUT:' + JSON.stringify(target)+':'+JSON.stringify(job));
         this._activeRequests.set(ivk, request);
         timeout = timeout || 10; // !!! timeout became mandatory
-        if ( timeout ) {
-          this._ivk2tid.set(ivk, setTimeout(() => this._timeoutHandler(ivk), timeout * 1000)); 
-        }
+        this._ivk2tid.set(ivk, setTimeout(() => this._timeoutHandler(ivk), timeout * 1000));
       }
 
-      subscribeJob (jobId, callback) {
+      subscribeJob (jobId, callback, timeout) {
         let p = jobId.split(':');
         let request = { tube: p[0], id: p[1], callback: callback };
 
         let ivk = this._selectInvokeId();
         this._send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'job', tube: request.tube, id: request.id }));
         this._activeRequests.set(ivk, request);
+        timeout = timeout || 10; // !!! timeout became mandatory
+        this._ivk2tid.set(ivk, setTimeout(() => this._timeoutHandler(ivk), timeout * 1000));
       }
 
       cancelJob (jobId, callback) {
@@ -639,6 +639,9 @@ websocket client for casper server
                   } else {
                     this.dispatchEvent(new CustomEvent(channel, {bubbles: true, composed: true, detail: notification}));
                   }
+                } else {
+                  // channel is no longer active, we can prune it from the map
+                  this._channel2ivk.delete(channel);
                 }
               }
             } else {
@@ -665,23 +668,22 @@ websocket client for casper server
                   payload = JSON.parse(data.substring(payload_start + 3));
                 } else if ((payload_start = data.indexOf(':S:{')) === offset) {
                   payload = JSON.parse(data.substring(payload_start + 3));
-                  if ( payload.channel && timerId ) {
-                    this._channel2ivk.set(payload.channel, invokeId);
-                    releaseInvoke = false;
-                  }
                 } else if ((payload_start = data.indexOf(':E:{')) === offset) {
                   payload = JSON.parse(data.substring(payload_start + 3));
                 } else {
                   // Unknown message ignore
                 }
-                
-                if ( releaseInvoke ) {
+                if ( payload.channel && timerId ) {
+                  // ... keep the invoke active to listen to upcomming channel notifications ...
+                  this._channel2ivk.set(payload.channel, invokeId);
+                } else {
+                  // ... release the invoke ...
                   if ( timerId ) {
                     clearTimeout(timerId);
                     this._ivk2tid.delete(invokeId);
                   }
                   this._activeRequests.delete(invokeId);
-                  this._freedInvokes.push(invokeId);                  
+                  this._freedInvokes.push(invokeId);
                 }
 
                 if ( payload && request.callback !== undefined ) {
@@ -689,7 +691,7 @@ websocket client for casper server
                   return;
                 }
               } else {
-                this._freedInvokes.push(invokeId); 
+                this._freedInvokes.push(invokeId);
               }
             }
           }
@@ -758,22 +760,22 @@ websocket client for casper server
        * Initializes internal data structures
        */
       _initData () {
-        this._pendingCommand = undefined;  
+        this._pendingCommand = undefined;
         this._freedInvokes   = [];         // keeps the invokes that were returned by the server
         this._activeRequests = new Map();  // hash, key is the Invoke value the request in flight
         this._documents      = new Map();
         this._nextInvokeId   = 1;          // The next fresh invoke ID
         this._ivk2tid        = new Map();  // hash key is invoke value the timer id
-        this._channel2ivk    = new Map();  // hash key is channel value is the invoke 
+        this._channel2ivk    = new Map();  // hash key is channel value is the invoke
       }
 
       /**
        * Observer to initialize the beanstalkd tube names
        */
       _onTubePrefixChanged () {
-        this._loginQueue           = this.tubePrefix + '-login'; 
-        this._switchEntityQueue    = this.tubePrefix + '-switch-entity'; 
-        this._switchSubEntityQueue = this.tubePrefix + '-switch-subentity'; 
+        this._loginQueue           = this.tubePrefix + '-login';
+        this._switchEntityQueue    = this.tubePrefix + '-switch-entity';
+        this._switchSubEntityQueue = this.tubePrefix + '-switch-subentity';
         this._logoutQueue          = this.tubePrefix + '-logout';
       }
 
@@ -784,7 +786,7 @@ websocket client for casper server
        */
       _showOverlay (detail) {
         this.dispatchEvent(new CustomEvent('casper-show-overlay', {
-            bubbles: true, 
+            bubbles: true,
             composed: true,
             detail: detail
           })
@@ -796,7 +798,7 @@ websocket client for casper server
        */
       _dismissOverlay () {
         this.dispatchEvent(new CustomEvent('casper-dismiss-overlay', {
-            bubbles: true, 
+            bubbles: true,
             composed: true
           })
         );
