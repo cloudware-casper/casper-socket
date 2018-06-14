@@ -431,14 +431,14 @@ websocket client for casper server
       switchToSubEntity (subEntityType, subEntityId, redirectUrl) {
         this._switchEntityChannel = undefined;
         this.submitJob({ 
-            tube:          this._switchSubEntityQueue,
-            user_id:       null,             // will be set by server from session data
-            access_token:  null,             // will be set by server from session data
-            refresh_token: null,             // will be set by server from session data
-            company_id:    null,             // will be set by server from session data
-            url:           redirectUrl,      // URL to load after the switch is made
-            sub_type:      subEntityType,    // Subentity type 
-            sub_entity_id: subEntityId       // Subentity identifier
+            tube:            this._switchSubEntityQueue,
+            user_id:         null,             // will be set by server from session data
+            access_token:    null,             // will be set by server from session data
+            refresh_token:   null,             // will be set by server from session data
+            company_id:      null,             // will be set by server from session data
+            url:             redirectUrl,      // URL to load after the switch is made
+            to_subtype:      subEntityType,    // Subentity type 
+            to_subentity_id: subEntityId       // Subentity identifier
           }, 
           this._switchToEntityResponse.bind(this), { 
             ttr: 60,
