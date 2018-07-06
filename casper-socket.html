@@ -114,23 +114,9 @@ websocket client for casper server
         } else {
           this._socket = new WebSocket(this._ws_url, this.webSocketProtocol);
         }
-        this._socket.onmessage = this._onSocketMessage.bind(this);
-
-        this._socket.onopen = function (message) {
-          if ( this._pendingCommand !== undefined ) {
-            this._socket.send(this._pendingCommand);
-            this._pendingCommand = undefined;
-          }
-          this.dispatchEvent(new CustomEvent('casper-connected', {bubbles: true, composed: true}));
-        }.bind(this);
-
-        this._socket.onclose = function (message) {
-          if ( this._silentDisconnect !== true ) {
-            this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} } ));
-          }
-          this._silentDisconnect = false;
-          this._socket = undefined; 
-        }.bind(this);
+        this._socket.addEventListener('message', this._onSocketMessage.bind(this));
+        this._socket.addEventListener('open'   , this._onSocketOpen.bind(this));
+        this._socket.addEventListener('close'  , this._onSocketClose.bind(this)); 
       }
 
       /**
@@ -615,6 +601,22 @@ websocket client for casper server
           return this._freedInvokes.shift()
         }
       }
+
+      _onSocketOpen (event) {
+        if ( this._pendingCommand !== undefined ) {
+           this._socket.send(this._pendingCommand);
+           this._pendingCommand = undefined;
+         }
+         this.dispatchEvent(new CustomEvent('casper-connected', {bubbles: true, composed: true}));
+      }
+
+      _onSocketClose (event) {
+        if ( this._silentDisconnect !== true ) {
+          this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} } ));
+        }
+        this._silentDisconnect = false;
+        this._socket = undefined; 
+      } 
 
       /**
        * Message decoder and handler, decodes the JSON payloads and delivers the message to the clients
