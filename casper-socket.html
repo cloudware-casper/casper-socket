@@ -114,9 +114,9 @@ websocket client for casper server
         } else {
           this._socket = new WebSocket(this._ws_url, this.webSocketProtocol);
         }
-        this._socket.addEventListener('message', this._onSocketMessage.bind(this));
-        this._socket.addEventListener('open'   , this._onSocketOpen.bind(this));
-        this._socket.addEventListener('close'  , this._onSocketClose.bind(this)); 
+        this._socket.onmessage = this._onSocketMessage.bind(this);
+        this._socket.onopen    = this._onSocketOpen.bind(this);
+        this._socket.onclose   = this._onSocketClose.bind(this); 
       }
 
       /**
@@ -604,10 +604,10 @@ websocket client for casper server
 
       _onSocketOpen (event) {
         if ( this._pendingCommand !== undefined ) {
-           this._socket.send(this._pendingCommand);
-           this._pendingCommand = undefined;
-         }
-         this.dispatchEvent(new CustomEvent('casper-connected', {bubbles: true, composed: true}));
+          this._socket.send(this._pendingCommand);
+          this._pendingCommand = undefined;
+        }
+        this.dispatchEvent(new CustomEvent('casper-connected', {bubbles: true, composed: true}));
       }
 
       _onSocketClose (event) {
