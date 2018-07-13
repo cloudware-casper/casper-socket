@@ -85,7 +85,7 @@ websocket client for casper server
         }
         this.port = this.port || window.location.port;
         this.path = this.path || 'epaper';
-        this._cookieParser   = new RegExp('.*casper-session=([0-9a-zA-Z]+)');
+        this._cookieParser   = new RegExp('.*casper_session=([0-9a-zA-Z]+)');
 
         if ( this.cookieDomain === undefined ) {
           let domain = window.location.hostname.split('.');
@@ -267,7 +267,7 @@ websocket client for casper server
       }
 
       _saveSessionCookie (accessToken) {
-        let cookie = `casper-session=${accessToken};path=/`;
+        let cookie = `casper_session=${accessToken};path=/`;
 
         if ( this.cookieDomain ) {
           cookie += `;domain=${this.cookieDomain}`;
@@ -289,7 +289,7 @@ websocket client for casper server
       }
 
       _deleteSessionCookie () {
-        let cookie = 'casper-session=;expires=Thu, 01 Jan 1970 00:00:01 GMT'
+        let cookie = 'casper_session=;expires=Thu, 01 Jan 1970 00:00:01 GMT'
         if ( this.cookieDomain ) {
           cookie += `;domain=${this.cookieDomain}`;
         } else {
