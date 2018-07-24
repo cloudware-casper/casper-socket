@@ -116,7 +116,7 @@ websocket client for casper server
         }
         this._socket.onmessage = this._onSocketMessage.bind(this);
         this._socket.onopen    = this._onSocketOpen.bind(this);
-        this._socket.onclose   = this._onSocketClose.bind(this); 
+        this._socket.onclose   = this._onSocketClose.bind(this);
       }
 
       /**
@@ -131,6 +131,15 @@ websocket client for casper server
 
       submitJob (job, callback, options) {
         let timeout;
+
+        // .. set all keys that will be automatically replaced with session values
+        job['user_id']          = null;
+        job['entity_id']        = null;
+        job['entity_schema']    = null;
+        job['sharded_schema']   = null;
+        job['subentity_id']     = null;
+        job['subentity_schema'] = null;
+
         let request = { job: job, callback: callback, options: options };
         let target  = {target: 'job-queue', tube: job.tube};
         if ( options ) {
@@ -186,8 +195,8 @@ websocket client for casper server
             password: b64password
           },
           this._signInResponse.bind(this),
-          { 
-            ttr: timeout - 1, 
+          {
+            ttr: timeout - 1,
             validity: timeout,
             timeout:  timeout
           }
@@ -207,7 +216,7 @@ websocket client for casper server
           if ( notification.status === 'completed' && notification.status_code === 200 ) {
             this._saveSessionCookie(notification.response.access_token);
             if ( notification.response.refresh_token ) {
-              window.localStorage.setItem('casper-refresh-token', notification.response.refresh_token);       
+              window.localStorage.setItem('casper-refresh-token', notification.response.refresh_token);
             }
             this._silentDisconnect = true;
             this.disconnect();
@@ -239,9 +248,9 @@ websocket client for casper server
                 tube:          this._logoutQueue,
                 access_token:  null,             // will be set by server from session data
                 refresh_token: null              // will be set by server from session data
-              }, 
-              this._signOutResponse.bind(this), {  
-                ttr: 90, 
+              },
+              this._signOutResponse.bind(this), {
+                ttr: 90,
                 validity: 120
               }
             );
@@ -276,7 +285,7 @@ websocket client for casper server
         }
         console.log(`cookie=${cookie}`);
         document.cookie = cookie;
-        // TODO expiration ??? 
+        // TODO expiration ???
       }
 
       _getSessionCookie () {
@@ -339,22 +348,22 @@ websocket client for casper server
 
       switchToEntity (entityId, redirectUrl, subEntityId) {
         this._switchEntityChannel = undefined;
-        this.submitJob({ 
+        this.submitJob({
             tube:          this._switchEntityQueue,
             user_id:       null,             // will be set by server from session data
             access_token:  null,             // will be set by server from session data
             refresh_token: null,             // will be set by server from session data
             to_entity_id:  entityId,         // id of the entity we'll switch to
             url:           redirectUrl       // URL to load after the switch is made
-          }, 
-          this._switchToEntityResponse.bind(this), { 
+          },
+          this._switchToEntityResponse.bind(this), {
             ttr: 60,
             validity: 70,
             timeout: 10,
-            overlay: { 
-              message: 'A mudar de empresa', 
-              spinner: true, 
-              icon: 'switch' 
+            overlay: {
+              message: 'A mudar de empresa',
+              spinner: true,
+              icon: 'switch'
             }
           }
         );
@@ -372,7 +381,7 @@ websocket client for casper server
       _switchEntityListener (notification) {
         if ( notification.status === 'completed' && notification.status_code === 200 ) {
           this._switchEntityChannel = undefined;
-          if ( notification.response.url[0] === '/' ) { 
+          if ( notification.response.url[0] === '/' ) {
             // ... we are on the same cluster ...
             this._switchResponse = notification.response;
             this._setSession(notification.response.access_token, this._validateSwitchSessionResponse.bind(this));
@@ -404,36 +413,36 @@ websocket client for casper server
           response.url = this._switchResponse.url;
           console.log("@_validateSwitchSessionResponse", response);
           this.dispatchEvent(new CustomEvent('casper-signed-in', {
-              bubbles: true, 
+              bubbles: true,
               composed: true,
               detail: response
             })
           );
-        }        
+        }
         this._switchResponse = undefined;
         this._switchEntityChannel = undefined;
       }
 
       switchToSubEntity (subEntityType, subEntityId, redirectUrl) {
         this._switchEntityChannel = undefined;
-        this.submitJob({ 
+        this.submitJob({
             tube:            this._switchSubEntityQueue,
             user_id:         null,             // will be set by server from session data
             access_token:    null,             // will be set by server from session data
             refresh_token:   null,             // will be set by server from session data
             company_id:      null,             // will be set by server from session data
             url:             redirectUrl,      // URL to load after the switch is made
-            to_subtype:      subEntityType,    // Subentity type 
+            to_subtype:      subEntityType,    // Subentity type
             to_subentity_id: subEntityId       // Subentity identifier
-          }, 
-          this._switchToEntityResponse.bind(this), { 
+          },
+          this._switchToEntityResponse.bind(this), {
             ttr: 60,
             validity: 70,
             timeout: 10,
-            overlay: { 
-              message: 'A mudar ano fiscal', 
-              spinner: true, 
-              icon: 'switch' 
+            overlay: {
+              message: 'A mudar ano fiscal',
+              spinner: true,
+              icon: 'switch'
             }
           }
         );
@@ -532,7 +541,7 @@ websocket client for casper server
       gotoPage (id, pageNumber, focus, callback) {
         let request = { callback: callback };
         let options = { target: "document", id: id };
-        
+
 
       }
 
@@ -542,7 +551,7 @@ websocket client for casper server
        * @param {number} id document identifier
        * @param {number} x coordinate where the mouse is overing
        * @param {number} y coordinate where the mouse is overing
-       * @param {function} callback bound response handler 
+       * @param {function} callback bound response handler
        */
       getHint (id, x, y, callback) {
         let request = { callback: callback };
@@ -615,12 +624,12 @@ websocket client for casper server
           this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} } ));
         }
         this._silentDisconnect = false;
-        this._socket = undefined; 
-      } 
+        this._socket = undefined;
+      }
 
       /**
        * Message decoder and handler, decodes the JSON payloads and delivers the message to the clients
-       * 
+       *
        * @param {Object} message the web socket message
        */
       _onSocketMessage (message) {
@@ -652,7 +661,7 @@ websocket client for casper server
                       }
                       // TODO i18n message
                       this._activeRequests.delete(invokeId);
-                    } 
+                    }
                     clearTimeout(timerId);
                     this._channel2ivk.delete(channel);
                     this._ivk2tid.delete(invokeId);
