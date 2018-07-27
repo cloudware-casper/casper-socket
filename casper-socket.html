@@ -454,6 +454,9 @@ websocket client for casper server
       //                                                                                       //
       //***************************************************************************************//
 
+      /**
+       * Open document template
+       */
       openDocument (chapterModel, clientCallback, documentHandler) {
         let request = { callback: function (response) {
                                     if ( undefined != response.id ) {
@@ -538,11 +541,23 @@ websocket client for casper server
         this._activeRequests.set(ivk, request);
       }
 
-      gotoPage (id, pageNumber, focus, callback) {
+      gotoPage (id, pageNumber, focus, callback) {  // focus???
         let request = { callback: callback };
         let options = { target: "document", id: id };
+        let command = { properties: { page: pageNumber }};
 
+        let ivk = this._selectInvokeId();
+        this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
+        this._activeRequests.set(ivk, request);
+      }
 
+      setScale (id, scale) {
+        let request = { callback: undefined };
+        let options = { target: "document", id: id };
+        let command = { properties: { scale: scale }};
+        let ivk = this._selectInvokeId();
+        this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
+        this._activeRequests.set(ivk, request);
       }
 
       /**
@@ -551,7 +566,7 @@ websocket client for casper server
        * @param {number} id document identifier
        * @param {number} x coordinate where the mouse is overing
        * @param {number} y coordinate where the mouse is overing
-       * @param {function} callback bound response handler
+       * @param {function} bound response handler to callback
        */
       getHint (id, x, y, callback) {
         let request = { callback: callback };
