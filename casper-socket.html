@@ -569,6 +569,43 @@ websocket client for casper server
         this._activeRequests.set(ivk, request);
       }
 
+      setListValue (id, value, callback) {
+        let request = { callback: callback };
+        let options = { target: "document", id: id };
+        let command = { input: { text: value, key: 'save' }};
+        let ivk = this._selectInvokeId();
+        this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
+        this._activeRequests.set(ivk, request);
+      }
+
+      getNotifications (channel, callback) {
+        let request = { callback: function (response) {
+               try {
+                 let notifications = [];
+                 for ( var m of response.members ) {
+                   notifications.push(JSON.parse(m));
+                 }
+                 callback(notifications);
+               } catch (e) {
+                 callback([]);
+               }
+             }.bind(this)
+          };
+        let options = { target: "notifications", channel: channel };
+        let ivk = this._selectInvokeId();
+        this._send(ivk + ':GET:' + JSON.stringify(options));
+        this._activeRequests.set(ivk, request);
+      }
+
+      subscribeNotifications (channel) {
+        let p = channel.split(':');
+        let ivk = this._selectInvokeId();
+        let request = { callback: undefined };
+        this._send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: p[0], id: p[1] }));
+        this._activeRequests.set(ivk, request);
+        this._ivk2tid.set(ivk, setTimeout(() => this._timeoutHandler(ivk), 10 * 1000));
+      }
+
       /**
        * Requests the server side hint for the current hovering point
        *
@@ -702,6 +739,8 @@ websocket client for casper server
                   // channel is no longer active, we can prune it from the map
                   this._channel2ivk.delete(channel);
                 }
+              } else {
+                this.dispatchEvent(new CustomEvent(channel, {bubbles: true, composed: true, detail: notification}));
               }
             } else {
               // TODO protocol error report???
