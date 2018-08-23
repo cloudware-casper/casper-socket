@@ -532,6 +532,18 @@ websocket client for casper server
         this._activeRequests.set(ivk, request);
       }
 
+      setTextT (id, value, motion, final, callback) {
+        let request = { callback: callback };
+        let options = { target: "document", id: id };
+        let command = { input: { text: value, final_update: final }};
+        if ( motion ) {
+          command.input.motion = motion;
+        }
+        let ivk = this._selectInvokeId();
+        this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
+        this._activeRequests.set(ivk, request);
+      }
+
       sendClick (id, x, y, callback) {
         let request = { callback: callback };
         let options = { target: "document", id: id };
@@ -561,7 +573,7 @@ websocket client for casper server
       }
 
       setEditable (id, editable, callback) {
-        let request = { callback: undefined };
+        let request = { callback: callback };
         let options = { target: "document", id: id };
         let command = { properties: { editable: editable }};
         let ivk = this._selectInvokeId();
