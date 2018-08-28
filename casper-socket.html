@@ -129,6 +129,14 @@ websocket client for casper server
         }
       }
 
+      isOpen () {
+        if ( this._socket === undefined ) {
+          return false;
+        } else {
+          return this._socket.readyState === 1;
+        }
+      }
+
       submitJob (job, callback, options) {
         let timeout;
 
