@@ -147,6 +147,7 @@ websocket client for casper server
         job['sharded_schema']   = null;
         job['subentity_id']     = null;
         job['subentity_schema'] = null;
+        job['subentity_prefix'] = null;
 
         let request = { job: job, callback: callback, options: options };
         let target  = {target: 'job-queue', tube: job.tube};
