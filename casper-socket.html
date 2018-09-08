@@ -792,7 +792,8 @@ websocket client for casper server
                 } else {
                   // Unknown message ignore
                 }
-                if ( payload.channel && timerId ) {
+                if ( payload.channel && timerId && ( !payload.status || payload.status.status === 'in-progress')) {
+                  console.log("**** Keeping channel ", payload.channel, " open");
                   // ... keep the invoke active to listen to upcomming channel notifications ...
                   this._channel2ivk.set(payload.channel, invokeId);
                 } else {
