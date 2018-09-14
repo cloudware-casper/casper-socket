@@ -745,9 +745,11 @@ websocket client for casper server
                       this._activeRequests.delete(invokeId);
                     }
                     clearTimeout(timerId);
+
                     this._channel2ivk.delete(channel);
                     this._ivk2tid.delete(invokeId);
                     this._freedInvokes.push(invokeId);
+                    console.log('--- Closing channel ', channel, ' open timerId=', timerId, ' invokeId', invokeId);
                   }
                   if ( channel === this._loginChannel ) {
                     this._loginListener(notification);
@@ -793,7 +795,7 @@ websocket client for casper server
                   // Unknown message ignore
                 }
                 if ( payload.channel && timerId && ( !payload.status || payload.status.status === 'in-progress')) {
-                  console.log("**** Keeping channel ", payload.channel, " open");
+                  console.log('**** Keeping channel ', payload.channel, ' open timerId=', timerId, ' invokeId', invokeId);
                   // ... keep the invoke active to listen to upcomming channel notifications ...
                   this._channel2ivk.set(payload.channel, invokeId);
                 } else {
