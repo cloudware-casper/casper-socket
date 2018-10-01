@@ -196,12 +196,13 @@ websocket client for casper server
       //                                                                                       //
       //***************************************************************************************//
 
-      signIn (email, b64password, timeout) {
+      signIn (email, b64password, timeout, remember) {
         this._loginChannel = undefined;
         this.submitJob({
             tube: this._loginQueue,
             email: email,
-            password: b64password
+            password: b64password,
+            remember: remember
           },
           this._signInResponse.bind(this),
           {
@@ -232,14 +233,14 @@ websocket client for casper server
             window.location = notification.response.url;
           } else if ( notification.status === 'error' ) {
             if ( notification.status_code === 403 ) {
-              this.dispatchEvent(new CustomEvent('casper-forbidden', {bubbles: true, composed: true}));
+              this.dispatchEvent(new CustomEvent('casper-forbidden', {bubbles: true, composed: true, detail: { message: notification.message }}));
             } else {
-              this.dispatchEvent(new CustomEvent('casper-error', {bubbles: true, composed: true}));
+              this.dispatchEvent(new CustomEvent('casper-error', {bubbles: true, composed: true, detail: { message: notification.message }}));
             }
           }
         } catch (exception) {
           console.log(exception);
-          this.dispatchEvent(new CustomEvent('casper-error', {bubbles: true, composed: true}));
+          this.dispatchEvent(new CustomEvent('casper-error', {bubbles: true, composed: true, detail: { message: notification.message }}));
         }
 
         // ... clean up
