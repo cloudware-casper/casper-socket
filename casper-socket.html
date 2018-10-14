@@ -64,6 +64,7 @@ websocket client for casper server
             value: 'casper',
             observer: '_onTubePrefixChanged'
           },
+          /** Define to use cookies valid for all sub domains of this domain */
           cookieDomain: {
             type: String,
             value: undefined
@@ -85,7 +86,6 @@ websocket client for casper server
         }
         this.port = this.port || window.location.port;
         this.path = this.path || 'epaper';
-        this._cookieParser   = new RegExp('.*casper_session=([0-9a-zA-Z]+)');
 
         if ( this.cookieDomain === undefined ) {
           let domain = window.location.hostname.split('.');
@@ -198,6 +198,9 @@ websocket client for casper server
 
       signIn (email, b64password, timeout, remember) {
         this._loginChannel = undefined;
+        if ( remember ) {
+          window.localStorage.setItem('casper-user-email', email);
+        }
         this.submitJob({
             tube: this._loginQueue,
             email: email,
@@ -221,10 +224,10 @@ websocket client for casper server
         }
       }
 
-      _loginListener (notification) {
+      loginListener (notification) {
         try {
           if ( notification.status === 'completed' && notification.status_code === 200 ) {
-            this._saveSessionCookie(notification.response.access_token);
+            this.saveSessionCookie(notification.response.access_token, notification.response.access_ttl);
             if ( notification.response.refresh_token ) {
               window.localStorage.setItem('casper-refresh-token', notification.response.refresh_token);
             }
@@ -232,7 +235,7 @@ websocket client for casper server
             this.disconnect();
             window.location = notification.response.url;
           } else if ( notification.status === 'error' ) {
-            if ( notification.status_code === 403 ) {
+            if ( notification.status_code === 401 ) {
               this.dispatchEvent(new CustomEvent('casper-forbidden', {bubbles: true, composed: true, detail: { message: notification.message }}));
             } else {
               this.dispatchEvent(new CustomEvent('casper-error', {bubbles: true, composed: true, detail: { message: notification.message }}));
@@ -252,12 +255,11 @@ websocket client for casper server
         let failed = false;
 
         try {
-          // TODO timeout for JOB, better have a common support for this
-          if ( this._getSessionCookie() ) {
+          if ( CasperSocket.sessionCookie ) {
                 this.submitJob({
                 tube:          this._logoutQueue,
-                access_token:  null,             // will be set by server from session data
-                refresh_token: null              // will be set by server from session data
+                access_token:  null,
+                refresh_token: null
               },
               this._signOutResponse.bind(this), {
                 ttr: 90,
@@ -268,13 +270,9 @@ websocket client for casper server
         } catch (exception) {
           // ... ignore and proceed with the the logout
           failed = true;
-          console.log(exception);
+        } finally {
+          this.wipeCredentials();
         }
-
-        // ... wipe session data ...
-        window.localStorage.removeItem('casper-refresh-token');
-        window.localStorage.removeItem('casper-remember-me');
-        this._deleteSessionCookie();
         if ( failed ) {
           this.dispatchEvent(new CustomEvent('casper-signed-out', {bubbles: true, composed: true}));
         }
@@ -283,50 +281,19 @@ websocket client for casper server
       _signOutResponse (response) {
         this.dispatchEvent(new CustomEvent('casper-signed-out', {bubbles: true, composed: true}));
         this.disconnect();
-      }
-
-      _saveSessionCookie (accessToken) {
-        let cookie = `casper_session=${accessToken};path=/`;
-
-        if ( this.cookieDomain ) {
-          cookie += `;domain=${this.cookieDomain}`;
-        } else {
-          cookie += ';';
-        }
-        console.log(`cookie=${cookie}`);
-        document.cookie = cookie;
-        // TODO expiration ???
-      }
-
-      _getSessionCookie () {
-        const match = this._cookieParser.exec(document.cookie);
-        if ( match && match.length === 2 && match[1].length >= 16 ) {
-          return match[1];
-        } else {
-          return undefined;
-        }
-      }
-
-      _deleteSessionCookie () {
-        let cookie = 'casper_session=;expires=Thu, 01 Jan 1970 00:00:01 GMT'
-        if ( this.cookieDomain ) {
-          cookie += `;domain=${this.cookieDomain}`;
-        } else {
-          cookie += ';';
-        }
-        document.cookie = cookie;
+        window.location = '/login';
       }
 
       /**
        * Try to validate the current access token
        */
       validateSession () {
-        const accessToken = this._getSessionCookie();
+        const accessToken = CasperSocket.sessionCookie;
 
         if ( accessToken ) {
           this._setSession(accessToken, this._validateSessionResponse.bind(this));
         } else {
-          this._deleteSessionCookie();
+          this.deleteSessionCookie();
           this.dispatchEvent(new CustomEvent('casper-signed-out', {bubbles: true, composed: true}));
         }
       }
@@ -342,10 +309,9 @@ websocket client for casper server
 
       _validateSessionResponse (response) {
         if ( response.success === false ) {
-          this._deleteSessionCookie();
+          this.deleteSessionCookie();
           this.dispatchEvent(new CustomEvent('casper-signed-out', { bubbles: true, composed: true }));
         } else {
-          console.log("@_validateSessionResponse", response);
           this.dispatchEvent(new CustomEvent('casper-signed-in', { bubbles: true, composed: true, detail: response }));
         }
       }
@@ -397,8 +363,8 @@ websocket client for casper server
             this._setSession(notification.response.access_token, this._validateSwitchSessionResponse.bind(this));
           } else {
             // ... we moved to another cluster ...
-            this._saveSessionCookie(notification.response.access_token);
-            if ( window.localStorage.getItem('casper-remember-me') === 'true' ) {
+            this.saveSessionCookie(notification.response.access_token, notification.response.access_ttl);
+            if ( notification.response.refresh_token) {
               window.localStorage.setItem('casper-refresh-token', notification.response.refresh_token);
             }
             window.location = notification.response.url;
@@ -411,17 +377,16 @@ websocket client for casper server
 
       _validateSwitchSessionResponse (response) {
         if ( response.success === false ) {
-          this._deleteSessionCookie();
+          this.deleteSessionCookie();
           this.dispatchEvent(new CustomEvent('casper-signed-out', {bubbles: true, composed: true}));
         } else {
           if ( this._switchResponse !== undefined ) {
-            this._saveSessionCookie(this._switchResponse.access_token);
-            if ( window.localStorage.getItem('casper-remember-me') === 'true' ) {
+            this.saveSessionCookie(this._switchResponse.access_token, this._switchResponse.access_ttl);
+            if ( this._switchResponse.refresh_token ) {
               window.localStorage.setItem('casper-refresh-token', this._switchResponse.refresh_token);
             }
           }
           response.url = this._switchResponse.url;
-          console.log("@_validateSwitchSessionResponse", response);
           this.dispatchEvent(new CustomEvent('casper-signed-in', {
               bubbles: true,
               composed: true,
@@ -753,7 +718,7 @@ websocket client for casper server
                     console.log('--- Closing channel ', channel, ' open timerId=', timerId, ' invokeId', invokeId);
                   }
                   if ( channel === this._loginChannel ) {
-                    this._loginListener(notification);
+                    this.loginListener(notification);
                   } else if ( channel === this._switchEntityChannel ) {
                     this._switchEntityListener(notification);
                   } else {
@@ -925,7 +890,100 @@ websocket client for casper server
             composed: true
           })
         );
-       }
+      }
+
+      //***************************************************************************************//
+      //                                                                                       //
+      //                      ~~~ Cookie and local storage handling ~~~                        //
+      //                                                                                       //
+      //***************************************************************************************//
+
+      /**
+       * Lazily create the regexp we use to retrieve the access token (session) from the cookie
+       */
+      static get cookieParser () {
+        if ( CasperSocket._cookieParser === undefined ) {
+          CasperSocket._cookieParser = new RegExp('.*casper_session=([0-9a-zA-Z]+)');
+        }
+        return CasperSocket._cookieParser;
+      }
+
+      /**
+       * Save session cookie with the current access token
+       *
+       * @param accessToken the access token generated by the server
+       * @param ttl Time to live how long the token should live in seconds
+       */
+      saveSessionCookie (accessToken, ttl) {
+        let cookie = `casper_session=${accessToken};path=/`;
+
+        if ( this.cookieDomain ) {
+          cookie += `;domain=${this.cookieDomain}`;
+        }
+        if ( ttl ) {
+          let now = new Date();
+          now.setSeconds(now.getSeconds() + ttl);
+          cookie += `;expires=${now.toUTCString()}`
+        }
+        cookie += ';';
+        document.cookie = cookie;
+      }
+
+      /**
+       * Retrieve the session cookie that contains the access token aka casper-session
+       */
+      static get sessionCookie () {
+        const match = CasperSocket.cookieParser.exec(document.cookie);
+        if ( match && match.length === 2 && match[1].length >= 16 ) {
+          return match[1];
+        } else {
+          return undefined;
+        }
+      }
+
+      /**
+       * Clears the cookie that contains the access token aka casper-session
+       */
+      deleteSessionCookie () {
+        let cookie = 'casper_session=;';
+        if ( this.cookieDomain ) {
+          cookie += `domain=${this.cookieDomain};`;
+        }
+        cookie += 'path=/;expires=Thu, 01 Jan 2018 00:00:01 GMT;'
+        document.cookie = cookie;
+      }
+
+      /**
+       *  Wipe stored credentials
+       */
+      wipeCredentials () {
+        this.deleteSessionCookie();
+        window.localStorage.removeItem('casper-user-email');
+        window.localStorage.removeItem('casper-refresh-token');
+      }
+
+      /**
+       * Retrieve saved email
+       */
+      static get savedEmail () {
+        return window.localStorage.getItem('casper-user-email');
+      }
+
+      /**
+       * Save user email
+       */
+      static set savedEmail (email) {
+        debugger;
+        window.localStorage.setItem('casper-user-email', email);
+      }
+
+      /**
+       * Retrieve saved credential
+       */
+      static get savedCredential () {
+        return window.localStorage.getItem('casper-refresh-token');
+      }
+
     }
 
     window.customElements.define(CasperSocket.is, CasperSocket);
