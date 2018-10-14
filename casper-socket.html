@@ -196,34 +196,6 @@ websocket client for casper server
       //                                                                                       //
       //***************************************************************************************//
 
-      signIn (email, b64password, timeout, remember) {
-        this._loginChannel = undefined;
-        if ( remember ) {
-          window.localStorage.setItem('casper-user-email', email);
-        }
-        this.submitJob({
-            tube: this._loginQueue,
-            email: email,
-            password: b64password,
-            remember: remember
-          },
-          this._signInResponse.bind(this),
-          {
-            ttr: timeout - 1,
-            validity: timeout,
-            timeout:  timeout
-          }
-        );
-      }
-
-      _signInResponse (response) {
-        if (response && response.success == true ) {
-          this._loginChannel = response.channel;
-        } else {
-          console.log('Server Error'); // Try latter
-        }
-      }
-
       loginListener (notification) {
         try {
           if ( notification.status === 'completed' && notification.status_code === 200 ) {
@@ -248,14 +220,13 @@ websocket client for casper server
 
         // ... clean up
         this.disconnect();
-        this._loginChannel = undefined;
       }
 
       signOut () {
         let failed = false;
 
         try {
-          if ( CasperSocket.sessionCookie ) {
+          if ( this.sessionCookie ) {
                 this.submitJob({
                 tube:          this._logoutQueue,
                 access_token:  null,
@@ -288,7 +259,7 @@ websocket client for casper server
        * Try to validate the current access token
        */
       validateSession () {
-        const accessToken = CasperSocket.sessionCookie;
+        const accessToken = this.sessionCookie;
 
         if ( accessToken ) {
           this._setSession(accessToken, this._validateSessionResponse.bind(this));
@@ -717,9 +688,7 @@ websocket client for casper server
                     this._freedInvokes.push(invokeId);
                     console.log('--- Closing channel ', channel, ' open timerId=', timerId, ' invokeId', invokeId);
                   }
-                  if ( channel === this._loginChannel ) {
-                    this.loginListener(notification);
-                  } else if ( channel === this._switchEntityChannel ) {
+                  if ( channel === this._switchEntityChannel ) {
                     this._switchEntityListener(notification);
                   } else {
                     this.dispatchEvent(new CustomEvent(channel, {bubbles: true, composed: true, detail: notification}));
@@ -820,9 +789,7 @@ websocket client for casper server
         }
         if ( channel ) {
           this._channel2ivk.delete(channel);
-          if ( channel === this._loginChannel ) {
-            this._loginChannel = undefined;
-          } else if ( channel === this._switchEntityChannel ) {
+          if ( channel === this._switchEntityChannel ) {
             this._switchEntityChannel = undefined;
           }
         }
@@ -861,7 +828,8 @@ websocket client for casper server
        * Observer to initialize the beanstalkd tube names
        */
       _onTubePrefixChanged () {
-        this._loginQueue           = this.tubePrefix + '-login';
+        this.loginTube             = this.tubePrefix + '-login';
+        this.refreshTube           = this.tubePrefix + '-token-refresh';
         this._switchEntityQueue    = this.tubePrefix + '-switch-entity';
         this._switchSubEntityQueue = this.tubePrefix + '-switch-subentity';
         this._logoutQueue          = this.tubePrefix + '-logout';
@@ -932,7 +900,7 @@ websocket client for casper server
       /**
        * Retrieve the session cookie that contains the access token aka casper-session
        */
-      static get sessionCookie () {
+      get sessionCookie () {
         const match = CasperSocket.cookieParser.exec(document.cookie);
         if ( match && match.length === 2 && match[1].length >= 16 ) {
           return match[1];
@@ -965,22 +933,21 @@ websocket client for casper server
       /**
        * Retrieve saved email
        */
-      static get savedEmail () {
+      get savedEmail () {
         return window.localStorage.getItem('casper-user-email');
       }
 
       /**
        * Save user email
        */
-      static set savedEmail (email) {
-        debugger;
+      set savedEmail (email) {
         window.localStorage.setItem('casper-user-email', email);
       }
 
       /**
        * Retrieve saved credential
        */
-      static get savedCredential () {
+      get savedCredential () {
         return window.localStorage.getItem('casper-refresh-token');
       }
 
