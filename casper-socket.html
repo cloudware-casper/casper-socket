@@ -150,6 +150,7 @@ websocket client for casper server
         job['subentity_id']     = null;
         job['subentity_schema'] = null;
         job['subentity_prefix'] = null;
+        job['user_email']       = null;
 
         let request = { job: job, callback: callback, options: options };
         let target  = {target: 'job-queue', tube: job.tube};
@@ -285,6 +286,9 @@ websocket client for casper server
           if ( response.refresh_token ) {
             window.localStorage.setItem('casper-refresh-token', response.refresh_token);
           }
+          if ( response.user_email ) {
+            this.savedEmail = response.user_email;
+          }
           this.dispatchEvent(new CustomEvent('casper-signed-in', { bubbles: true, composed: true, detail: response }));
         }
       }
@@ -352,6 +356,9 @@ websocket client for casper server
         } else {
           if ( this._switchResponse !== undefined ) {
             this.saveSessionCookie(this._switchResponse.access_token, this._switchResponse.access_ttl, this._switchResponse.issuer_url);
+            if ( this._switchResponse.user_email ) {
+              this.savedEmail = this._switchResponse.user_email;
+            }
             if ( response.refresh_token ) {
               window.localStorage.setItem('casper-refresh-token', response.refresh_token);
             }
@@ -611,7 +618,7 @@ websocket client for casper server
        */
       _send (message) {
         if ( this._socket === undefined || this._socket.readyState !== 1 ) {
-          this._pendingCommand = message;
+          this._pendingCommands.push(message);
           this.connect()
         } else if (this._socket.readyState === 1 ) {
           this._socket.send(message);
@@ -630,9 +637,11 @@ websocket client for casper server
       }
 
       _onSocketOpen (event) {
-        if ( this._pendingCommand !== undefined ) {
-          this._socket.send(this._pendingCommand);
-          this._pendingCommand = undefined;
+        if ( this._pendingCommands.length !== 0 ) {
+          for (let message of this._pendingCommands) {
+            this._socket.send(message);
+          }
+          this._pendingCommands = [];
         }
         this.dispatchEvent(new CustomEvent('casper-connected', {bubbles: true, composed: true}));
       }
@@ -814,13 +823,13 @@ websocket client for casper server
        * Initializes internal data structures
        */
       _initData () {
-        this._pendingCommand = undefined;
-        this._freedInvokes   = [];         // keeps the invokes that were returned by the server
-        this._activeRequests = new Map();  // hash, key is the Invoke value the request in flight
-        this._documents      = new Map();
-        this._nextInvokeId   = 1;          // The next fresh invoke ID
-        this._ivk2tid        = new Map();  // hash key is invoke value the timer id
-        this._channel2ivk    = new Map();  // hash key is channel value is the invoke
+        this._pendingCommands = [];         // Commands waiting for session establishment
+        this._freedInvokes    = [];         // keeps the invokes that were returned by the server
+        this._activeRequests  = new Map();  // hash, key is the Invoke value the request in flight
+        this._documents       = new Map();
+        this._nextInvokeId    = 1;          // The next fresh invoke ID
+        this._ivk2tid         = new Map();  // hash key is invoke value the timer id
+        this._channel2ivk     = new Map();  // hash key is channel value is the invoke
       }
 
       /**
@@ -907,21 +916,6 @@ websocket client for casper server
         if ( issuer_url ) {
           this.saveCookie('casper_issuer', issuer_url);
         }
-        /* let cookie = `casper_session=${accessToken};path=/`;
-
-        if (  window.location.protocol === 'https:' ) {
-          cookie += ';secure=true';
-        }
-        if ( this.cookieDomain ) {
-          cookie += `;domain=${this.cookieDomain}`;
-        }
-        if ( ttl ) {
-          let now = new Date();
-          now.setSeconds(now.getSeconds() + ttl);
-          cookie += `;expires=${now.toUTCString()}`
-        }
-        cookie += ';';
-        document.cookie = cookie;*/
       }
 
       /**
