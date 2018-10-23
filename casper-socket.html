@@ -68,6 +68,11 @@ websocket client for casper server
           cookieDomain: {
             type: String,
             value: undefined
+          },
+          /** Default timeout for server requests in seconds */
+          defaultTimeout: {
+            type: Number,
+            value: 10
           }
         }
       }
@@ -139,7 +144,7 @@ websocket client for casper server
         }
       }
 
-      submitJob (job, callback, options) {
+      submitJob (job, handler, options) {
         let timeout;
 
         // .. set all keys that will be automatically replaced with session values
@@ -152,7 +157,6 @@ websocket client for casper server
         job['subentity_prefix'] = null;
         job['user_email']       = null;
 
-        let request = { job: job, callback: callback, options: options };
         let target  = {target: 'job-queue', tube: job.tube};
         if ( options ) {
           if ( options.ttr ) {
@@ -166,29 +170,55 @@ websocket client for casper server
             this._showOverlay(options.overlay);
           }
         }
+        timeout = timeout || this.defaultTimeout;
         let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), timeout * 1000);
+        let request = { job: job, callback: this._submitJobResponse.bind(this), options: options, handler: handler, invokeId: ivk, timer: tid };
         this._send(ivk + ':PUT:' + JSON.stringify(target)+':'+JSON.stringify(job));
         this._activeRequests.set(ivk, request);
-        timeout = timeout || 10; // !!! timeout became mandatory
-        this._ivk2tid.set(ivk, setTimeout(() => this._timeoutHandler(ivk), timeout * 1000));
       }
 
-      subscribeJob (jobId, callback, timeout) {
-        let p = jobId.split(':');
-        let request = { tube: p[0], id: p[1], callback: callback };
+      _submitJobResponse (response, request) {
+        if ( response.success === true && response.channel ) {
+          request.channel = response.channel;
+          this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true });
+        } else {
+          request.handler({
+              message: ['O servidor recusou o pedido, p.f. tente mais tarde'],
+              status: 'error',
+              status_code: 500
+            });
+        }
+      }
 
+      subscribeJob (jobId, handler, timeout) {
+        let p = jobId.split(':');
+        timeout = timeout || this.defaultTimeout;
         let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), timeout * 1000);
+        let request = { tube: p[0], id: p[1], callback: this._subscribeJobResponse.bind(this), handler: handler, invokeId: ivk, timer: tid };
         this._send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'job', tube: request.tube, id: request.id }));
         this._activeRequests.set(ivk, request);
-        timeout = timeout || 10; // !!! timeout became mandatory
-        this._ivk2tid.set(ivk, setTimeout(() => this._timeoutHandler(ivk), timeout * 1000));
+      }
+
+      _subscribeJobResponse (response, request) {
+        request.channel = response.channel;
+        if ( response.success === true && response.channel ) {
+          this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true });
+        } else {
+          request.handler({
+              message: ['O servidor recusou o pedido, p.f. tente mais tarde'],
+              status: 'error',
+              status_code: 500
+            });
+        }
       }
 
       cancelJob (jobId, callback) {
-        let p = jobId.split(':');
-        let request = { tube: p[0], id: p[1], callback: callback };
-
         let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let p = jobId.split(':');
+        let request = { tube: p[0], id: p[1], callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':CANCEL:' + JSON.stringify({ target: 'job-queue', tube: request.tube, id: request.id }));
         this._activeRequests.set(ivk, request);
       }
@@ -216,10 +246,9 @@ websocket client for casper server
         } catch (exception) {
           console.log(exception);
           this.dispatchEvent(new CustomEvent('casper-error', {bubbles: true, composed: true, detail: { message: notification.message }}));
+        } finally {
+          this.disconnect();
         }
-
-        // ... clean up
-        this.disconnect();
       }
 
       signOut () {
@@ -256,7 +285,7 @@ websocket client for casper server
       }
 
       /**
-       * Try to validate the current access token
+       * Validate the current access token, retrieve access token (session) from cookie and set on websocket
        */
       validateSession () {
         const accessToken = this.sessionCookie;
@@ -269,17 +298,29 @@ websocket client for casper server
         }
       }
 
+      /**
+       * Send the command that sets the current session on the casper server websocket context
+       *
+       * @param {String}   accessToken the session indentifier
+       * @param {function} callback function that will be called (bound to receiver)
+       */
       _setSession (accessToken, callback) {
-        let request = { access_token: accessToken };
-
+        this._accessToken = accessToken;
         let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { access_token: accessToken, callback: callback, invokeId: ivk, timer: tid };
         this._send(ivk + ':SET:{"target":"session"}:' + JSON.stringify(request));
         this._activeRequests.set(ivk, request);
-        request.callback = callback;
       }
 
+      /**
+       * Handle the set session response returned by the server
+       *
+       * @param {object} response the server response to the set session command
+       */
       _validateSessionResponse (response) {
         if ( response.success === false ) {
+          this._accessToken = undefined;
           this.deleteSessionCookie();
           this.dispatchEvent(new CustomEvent('casper-signed-out', { bubbles: true, composed: true }));
         } else {
@@ -287,6 +328,7 @@ websocket client for casper server
             window.localStorage.setItem('casper-refresh-token', response.refresh_token);
           }
           if ( response.user_email ) {
+            this._updateEmailNotifications(response.user_email);
             this.savedEmail = response.user_email;
           }
           this.dispatchEvent(new CustomEvent('casper-signed-in', { bubbles: true, composed: true, detail: response }));
@@ -300,16 +342,14 @@ websocket client for casper server
       //***************************************************************************************//
 
       switchToEntity (entityId, redirectUrl, subEntityId) {
-        this._switchEntityChannel = undefined;
         this.submitJob({
             tube:          this._switchEntityQueue,
-            user_id:       null,             // will be set by server from session data
             access_token:  null,             // will be set by server from session data
             refresh_token: null,             // will be set by server from session data
             to_entity_id:  entityId,         // id of the entity we'll switch to
             url:           redirectUrl       // URL to load after the switch is made
           },
-          this._switchToEntityResponse.bind(this), {
+          this._switchEntityListener.bind(this), {
             ttr: 60,
             validity: 70,
             timeout: 10,
@@ -322,18 +362,8 @@ websocket client for casper server
         );
       }
 
-      _switchToEntityResponse (response) {
-        if ( response.success === true ) {
-          this._switchEntityChannel = response.channel;
-        } else {
-          this._switchEntityChannel = undefined;
-          this._showOverlay({message: 'falhou a mudança de empresa', icon: 'error' });
-        }
-      }
-
       _switchEntityListener (notification) {
         if ( notification.status === 'completed' && notification.status_code === 200 ) {
-          this._switchEntityChannel = undefined;
           if ( notification.response.url[0] === '/' ) {
             // ... we are on the same cluster ...
             this._switchResponse = notification.response;
@@ -344,7 +374,6 @@ websocket client for casper server
             window.location = notification.response.url;
           }
         } else {
-          this._switchEntityChannel = undefined;
           this._showOverlay({message: 'falhou a mudança de empresa', icon: 'error' });
         }
       }
@@ -355,8 +384,10 @@ websocket client for casper server
           this.dispatchEvent(new CustomEvent('casper-signed-out', {bubbles: true, composed: true}));
         } else {
           if ( this._switchResponse !== undefined ) {
+            this._accessToken = this._switchResponse.access_token;
             this.saveSessionCookie(this._switchResponse.access_token, this._switchResponse.access_ttl, this._switchResponse.issuer_url);
             if ( this._switchResponse.user_email ) {
+              this._updateEmailNotifications(response.user_email);
               this.savedEmail = this._switchResponse.user_email;
             }
             if ( response.refresh_token ) {
@@ -372,22 +403,18 @@ websocket client for casper server
           );
         }
         this._switchResponse = undefined;
-        this._switchEntityChannel = undefined;
       }
 
       switchToSubEntity (subEntityType, subEntityId, redirectUrl) {
-        this._switchEntityChannel = undefined;
         this.submitJob({
             tube:            this._switchSubEntityQueue,
-            user_id:         null,             // will be set by server from session data
             access_token:    null,             // will be set by server from session data
             refresh_token:   null,             // will be set by server from session data
-            company_id:      null,             // will be set by server from session data
             url:             redirectUrl,      // URL to load after the switch is made
             to_subtype:      subEntityType,    // Subentity type
             to_subentity_id: subEntityId       // Subentity identifier
           },
-          this._switchToEntityResponse.bind(this), {
+          this._switchEntityListener.bind(this), {
             ttr: 60,
             validity: 70,
             timeout: 10,
@@ -410,140 +437,155 @@ websocket client for casper server
        * Open document template
        */
       openDocument (chapterModel, clientCallback, documentHandler) {
-        let request = { callback: function (response) {
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { timer: tid, invokeId: ivk, callback: function (response) {
                                     if ( undefined != response.id ) {
                                       this._documents.set(response.id, documentHandler);
                                     }
                                     clientCallback(response);
                                   }.bind(this) };
         let options = { target: "document" }
-        let ivk = this._selectInvokeId();
         this._send(ivk + ':OPEN:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
         this._activeRequests.set(ivk, request);
       }
 
       loadDocument (chapterModel, clientCallback) {
-        let request = { callback: clientCallback };
-        let options = { target: "document", id: chapterModel.id }
         let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { callback: clientCallback , timer: tid, invokeId: ivk };
+        let options = { target: "document", id: chapterModel.id }
         this._send(ivk + ':LOAD:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
         this._activeRequests.set(ivk, request);
       }
 
       reloadDocument (id, callback) {
-        let request = { callback: callback };
-        let options = { target: "document", id: id }
         let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { callback: callback, timer: tid, invokeId: ivk };
+        let options = { target: "document", id: id }
         this._send(ivk + ':RELOAD:' + JSON.stringify(options));
         this._activeRequests.set(ivk, request);
       }
 
       closeDocument (id, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         let options;
         if ( undefined != id ) {
           options = { target: "document", id: id }
         } else {
           options = { target: "document" }
         }
-        let ivk = this._selectInvokeId();
         this._send(ivk + ':CLOSE:' + JSON.stringify(options));
         this._activeRequests.set(ivk, request);
       }
 
       sendKey (id, key, modifier, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         let options = { target: "document", id: id };
         let command = { input: { key: key }};
         if ( modifier ) {
           command.input.modifier = modifier;
         }
-        let ivk = this._selectInvokeId();
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       moveCursor (id, motion, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         let options = { target: "document", id: id };
         let command = { input: { motion: motion }};
-        let ivk = this._selectInvokeId();
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       setText (id, value, motion, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         let options = { target: "document", id: id };
         let command = { input: { text: value }};
         if ( motion ) {
           command.input.motion = motion;
         }
-        let ivk = this._selectInvokeId();
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       setTextT (id, value, motion, final, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         let options = { target: "document", id: id };
         let command = { input: { text: value, final_update: final }};
         if ( motion ) {
           command.input.motion = motion;
         }
-        let ivk = this._selectInvokeId();
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       sendClick (id, x, y, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let options = { target: "document", id: id };
         let command = { input: { click: { x: x, y: y }}};
-        let ivk = this._selectInvokeId();
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       gotoPage (id, pageNumber, focus, callback) {  // focus???
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let options = { target: "document", id: id };
         let command = { properties: { page: pageNumber }};
+        let request = { callback: callback, timer: tid, invokeId: ivk };
 
-        let ivk = this._selectInvokeId();
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       setScale (id, scale, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let options = { target: "document", id: id };
         let command = { properties: { scale: scale }};
-        let ivk = this._selectInvokeId();
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       setEditable (id, editable, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let options = { target: "document", id: id };
         let command = { properties: { editable: editable }};
-        let ivk = this._selectInvokeId();
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       setListValue (id, value, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let options = { target: "document", id: id };
         let command = { input: { text: value, key: 'save' }};
-        let ivk = this._selectInvokeId();
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       getNotifications (channel, callback) {
-        let request = { callback: function (response) {
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { invokeId: ivk, timer: tid, callback: function (response) {
                try {
                  let notifications = [];
                  for ( var m of response.members ) {
@@ -556,18 +598,48 @@ websocket client for casper server
              }.bind(this)
           };
         let options = { target: "notifications", channel: channel };
-        let ivk = this._selectInvokeId();
         this._send(ivk + ':GET:' + JSON.stringify(options));
         this._activeRequests.set(ivk, request);
       }
 
-      subscribeNotifications (channel) {
-        let p = channel.split(':');
+      subscribeNotifications (channel, id, handler) {
         let ivk = this._selectInvokeId();
-        let request = { callback: undefined };
-        this._send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: p[0], id: p[1] }));
+        let chn = channel + ':' + id;
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { callback: this._subscribeNotificationsResponse.bind(this), channel: chn, handler: handler, timer: tid, invokeId: ivk };
+        this._send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id }));
         this._activeRequests.set(ivk, request);
-        this._ivk2tid.set(ivk, setTimeout(() => this._timeoutHandler(ivk), 10 * 1000));
+        this._subscriptions.set(channel + ':' + id, { handler: handler, timer: tid, invokeId: ivk, confirmed: false, notification: true});
+      }
+
+      _subscribeNotificationsResponse (response, request) {
+        let subscription = undefined;
+
+        if ( request.channel ) {
+          subscription = this._subscriptions.get(request.channel);
+          if ( subscription ) {
+            if ( response.success === true ) {
+              subscription.timer     = undefined;
+              subscription.invokeId  = undefined;
+              subscription.confirmed = true;
+              return;
+            }
+          }
+        }
+        // cleanup
+        if ( subscription ) {
+          if ( subscription.handler ) {
+            subscription.handler("failed"); // TODO normalize response
+          }
+          this._subscriptions.delete(request.channel);
+        }
+      }
+
+      _unsubscribeNotifications (channel, id, handler) {
+        /*let ivk = this._selectInvokeId();
+        let request = { callback: callback, timer: tid, invokeId: ivk };
+        this._send(ivk + ':UNSUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id }));
+        this._activeRequests.set(ivk, request);*/
       }
 
       /**
@@ -579,28 +651,31 @@ websocket client for casper server
        * @param {function} bound response handler to callback
        */
       getHint (id, x, y, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let options = { target: "document", id: id };
         let command = { hint: { x: 1.0 * x.toFixed(2), y: 1.0 * y.toFixed(2) }};
-        let ivk = this._selectInvokeId();
+        let request = { callback: callback, timer: tid, invokeId: ivk  };
         this._send(ivk + ':GET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       addBand (id, type, bandId, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let options = { target: "document", id: id };
         let command = { band: { type: type, id: bandId}};
-        let ivk = this._selectInvokeId();
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':ADD:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
 
       deleteBand (id, type, bandId, callback) {
-        let request = { callback: callback };
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let options = { target: "document", id: id };
         let command = { band: { type: type, id: bandId}};
-        let ivk = this._selectInvokeId();
+        let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':REMOVE:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
       }
@@ -670,14 +745,14 @@ websocket client for casper server
             if ( -1 !== end ) {
               const channel = data.substring(16,end);
               const notification = JSON.parse(data.substring(end+3));
+              const subscription = this._subscriptions.get(channel);
 
-              invokeId = this._channel2ivk.get(channel);
-              if ( invokeId ) {
-                timerId = this._ivk2tid.get(invokeId);
+              if ( subscription ) {
+                timerId = subscription.timer;
                 if ( timerId ) {
                   if ( notification.status !== 'in-progress' ) {
 
-                    let request = this._activeRequests.get(invokeId);
+                    let request = this._activeRequests.get(subscription.invokeId);
                     if ( request ) {
                       if ( request.options && request.options.overlay ) {
                         if ( notification.status === 'error') {
@@ -686,30 +761,31 @@ websocket client for casper server
                           this._dismissOverlay();
                         }
                       }
-                      // TODO i18n message
                       this._activeRequests.delete(invokeId);
                     }
                     clearTimeout(timerId);
-
-                    this._channel2ivk.delete(channel);
-                    this._ivk2tid.delete(invokeId);
-                    this._freedInvokes.push(invokeId);
-                    console.log('--- Closing channel ', channel, ' open timerId=', timerId, ' invokeId', invokeId);
+                    this._subscriptions.delete(channel);
+                    this._freedInvokes.push(subscription.invokeId);
+                    console.log('--- Closing channel ', channel, ' open timerId=', timerId, ' invokeId', subscription.invokeId);
                   }
-                  if ( channel === this._switchEntityChannel ) {
-                    this._switchEntityListener(notification);
+                  if (subscription.confirmed && subscription.handler) {
+                    subscription.handler(notification);
                   } else {
-                    this.dispatchEvent(new CustomEvent(channel, {bubbles: true, composed: true, detail: notification}));
+                    console.log("**** subscription no longer active:", channel);
                   }
                 } else {
-                  // channel is no longer active, we can prune it from the map
-                  this._channel2ivk.delete(channel);
+                  if ( subscription.confirmed && subscription.notification && subscription.handler ) {
+                    console.warn('This a real notification ', channel);
+                    subscription.handler(notification);
+                  } else {
+                    console.warn('**** subscription no longer active: ' + channel);
+                  }
                 }
               } else {
-                this.dispatchEvent(new CustomEvent(channel, {bubbles: true, composed: true, detail: notification}));
+                console.warn("**** subscription no longer active:", channel);
               }
             } else {
-              // TODO protocol error report???
+              console.error("Yikes! Protocol decoding error");
             }
             return;
           }
@@ -727,7 +803,7 @@ websocket client for casper server
               if ( request !== undefined ) {
                 let payload_start;
 
-                timerId = this._ivk2tid.get(invokeId);
+                timerId = request.timer;
                 if ( (payload_start = data.indexOf(':R:{')) === offset ) {
                   payload = JSON.parse(data.substring(payload_start + 3));
                 } else if ((payload_start = data.indexOf(':S:{')) === offset) {
@@ -736,23 +812,19 @@ websocket client for casper server
                   payload = JSON.parse(data.substring(payload_start + 3));
                 } else {
                   // Unknown message ignore
+                  console.error('casper protocol decoding error!!!');
                 }
-                if ( payload.channel && timerId && ( !payload.status || payload.status.status === 'in-progress')) {
-                  console.log('**** Keeping channel ', payload.channel, ' open timerId=', timerId, ' invokeId', invokeId);
-                  // ... keep the invoke active to listen to upcomming channel notifications ...
-                  this._channel2ivk.set(payload.channel, invokeId);
-                } else {
+                if ( ! (payload.channel && timerId && ( !payload.status || payload.status.status === 'in-progress' ))) {
                   // ... release the invoke ...
                   if ( timerId ) {
                     clearTimeout(timerId);
-                    this._ivk2tid.delete(invokeId);
                   }
                   this._activeRequests.delete(invokeId);
                   this._freedInvokes.push(invokeId);
                 }
 
                 if ( payload && request.callback !== undefined ) {
-                  request.callback(payload);
+                  request.callback(payload, request);
                   return;
                 }
               } else {
@@ -777,31 +849,19 @@ websocket client for casper server
 
         const request = this._activeRequests.get(invokeId);
         if ( request !== undefined ) {
-          if ( request.callback !== undefined ) {
-            request.callback({
+          if ( request.handler !== undefined ) {
+            request.handler({
               message: ['i18n_server_timeout'],
               status: 'error',
               status_code: 504
             });
           }
           this._activeRequests.delete(invokeId);
-        }
-
-        // ... scan the channel registry to find the channel associated with the request ...
-        let channel;
-        for ( let [chid, ivk] of this._channel2ivk ) {
-          if ( ivk === invokeId ) {
-            channel = chid;
-            break;
+          this._freedInvokes.push(invokeId);
+          if ( request.channel ) {
+            this._subscriptions.delete(request.channel);
           }
         }
-        if ( channel ) {
-          this._channel2ivk.delete(channel);
-          if ( channel === this._switchEntityChannel ) {
-            this._switchEntityChannel = undefined;
-          }
-        }
-        this._ivk2tid.delete(invokeId); // don't recycle the invoke coz the server might still respond
         this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
       }
 
@@ -809,13 +869,14 @@ websocket client for casper server
        * Clears timers and internal data
        */
       _clearData () {
-        for ( let timerId of this._ivk2tid.values() ) {
-          clearTimeout(timerId);
+        for ( let request of this._activeRequests.values() ) {
+          if ( request.timer ) {
+            clearTimeout(request.timer);
+          }
         }
         this._activeRequests.clear();
         this._documents.clear();
-        this._ivk2tid.clear();
-        this._channel2ivk.clear();
+        this._subscriptions.clear(); // TODO KEEP NOTIFICATIONS
         this._initData();
       }
 
@@ -823,13 +884,14 @@ websocket client for casper server
        * Initializes internal data structures
        */
       _initData () {
+        this._savedEmail      = undefined;  // The email used to sign-in
+        this._accessToken     = undefined;  // The current access token in use
         this._pendingCommands = [];         // Commands waiting for session establishment
         this._freedInvokes    = [];         // keeps the invokes that were returned by the server
         this._activeRequests  = new Map();  // hash, key is the Invoke value the request in flight
         this._documents       = new Map();
         this._nextInvokeId    = 1;          // The next fresh invoke ID
-        this._ivk2tid         = new Map();  // hash key is invoke value the timer id
-        this._channel2ivk     = new Map();  // hash key is channel value is the invoke
+        this._subscriptions   = new Map();  // Registry of server subscriptions, key is channel
       }
 
       /**
@@ -866,6 +928,17 @@ websocket client for casper server
             composed: true
           })
         );
+      }
+
+      _updateEmailNotifications (userEmail) {
+        if ( this._savedEmail !== userEmail ) {
+          // TODO unsubscribe email this._unsubscribeNotifications('email', _savedEmail);
+          this.subscribeNotifications('email', userEmail, function (notification) {
+            if ( notification.access_token && this._accessToken && this._accessToken !== notification.access_token ) {
+              console.log("Shoot dam user created a new session on my back!!! ", notification.access_token);
+            }
+          }.bind(this));
+        }
       }
 
       //***************************************************************************************//
@@ -963,14 +1036,17 @@ websocket client for casper server
        * Retrieve saved email
        */
       get savedEmail () {
-        return window.localStorage.getItem('casper-user-email');
+        return this._savedEmail || window.localStorage.getItem('casper-user-email');
       }
 
       /**
        * Save user email
        */
       set savedEmail (email) {
-        window.localStorage.setItem('casper-user-email', email);
+        if ( this._savedEmail !== email ) {
+          window.localStorage.setItem('casper-user-email', email);
+          this._savedEmail = email;
+        }
       }
 
       /**
