@@ -335,6 +335,30 @@ websocket client for casper server
         }
       }
 
+      extendSession () {
+        this.submitJob({
+            tube:          this.extendTube,
+            access_token:  null
+          },
+          this._extendSessionResponse.bind(this), {
+            ttr: Math.max(this.defaultTimeout - 5, 5),
+            validity: this.defaultTimeout,
+            timeout: this.defaultTimeout
+          }
+        );
+      }
+
+      _extendSessionResponse (response) {
+        if ( response.status === 'completed' && response.status_code === 200 ) {
+          this.saveSessionCookie(response.response.access_token, response.response.access_ttl, response.response.issuer_url);
+          this.validateSession();
+          return;
+        } else {
+          window.location = '/login';
+        }
+      }
+
+
       //***************************************************************************************//
       //                                                                                       //
       //                              ~~~ Entity switching ~~~                                 //
@@ -900,6 +924,7 @@ websocket client for casper server
       _onTubePrefixChanged () {
         this.loginTube             = this.tubePrefix + '-login';
         this.refreshTube           = this.tubePrefix + '-token-refresh';
+        this.extendTube            = this.tubePrefix + '-session-extend';
         this._switchEntityQueue    = this.tubePrefix + '-switch-entity';
         this._switchSubEntityQueue = this.tubePrefix + '-switch-subentity';
         this._logoutQueue          = this.tubePrefix + '-logout';
