@@ -107,6 +107,17 @@ websocket client for casper server
         this._initData();
         this._silentDisconnect = false;
         this._socket = undefined;
+
+        document.addEventListener('mouseout', e => this._mouseOutListener(e));
+        document.addEventListener('click',    e => this.userActivity(e));
+        document.addEventListener('keypress', e => this.userActivity(e));
+        window.addEventListener('blur',       e => this.applicationInactive(e));
+      }
+
+      _mouseOutListener (event) {
+        if (event.toElement == null && event.relatedTarget == null) {
+          this.applicationInactive(event);
+        }
       }
 
       disconnectedCallback () {
@@ -964,6 +975,14 @@ websocket client for casper server
             }
           }.bind(this));
         }
+      }
+
+      userActivity (event) {
+        console.log('user Active ', event);
+      }
+
+      applicationInactive (event) {
+        console.log('application Inactive ', event);
       }
 
       //***************************************************************************************//
