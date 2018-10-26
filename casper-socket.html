@@ -73,6 +73,16 @@ websocket client for casper server
           defaultTimeout: {
             type: Number,
             value: 10
+          },
+          /** Time the web socket is kept open after the user becomes idle, must be less than sessionRenewTimeout */
+          userIdleTimeout: {
+            type: Number,
+            value: 10 // 5 * 60
+          },
+          /** Time between session renewals must be less than the access token duration */
+          sessionRenewTimeout: {
+            type: Number,
+            value: 10 // 5 * 60
           }
         }
       }
@@ -111,7 +121,7 @@ websocket client for casper server
       connectedCallback () {
         this._initData();
         this._silentDisconnect = false;
-        this._socket = undefined;
+        this._socket           = undefined;
 
         document.addEventListener('mouseout', this._boundMouseOutListener);
         document.addEventListener('click',    this._boundUserActivity);
@@ -351,9 +361,9 @@ websocket client for casper server
             window.localStorage.setItem('casper-last-entity-id', response.entity_id);
           }
           if ( response.user_email ) {
-            this._updateEmailNotifications(response.user_email);
             this.savedEmail = response.user_email;
           }
+          this._startIdleTimer();
           this.dispatchEvent(new CustomEvent('casper-signed-in', { bubbles: true, composed: true, detail: response }));
         }
       }
@@ -434,7 +444,6 @@ websocket client for casper server
             this._accessToken = this._switchResponse.access_token;
             this.saveSessionCookie(this._switchResponse.access_token, this._switchResponse.access_ttl, this._switchResponse.issuer_url);
             if ( this._switchResponse.user_email ) {
-              this._updateEmailNotifications(response.user_email);
               this.savedEmail = this._switchResponse.user_email;
             }
             if ( response.refresh_token ) {
@@ -445,6 +454,7 @@ websocket client for casper server
             }
           }
           response.url = this._switchResponse.url;
+          this._startIdleTimer();
           this.dispatchEvent(new CustomEvent('casper-signed-in', {
               bubbles: true,
               composed: true,
@@ -773,7 +783,9 @@ websocket client for casper server
 
       _onSocketClose (event) {
         if ( this._silentDisconnect !== true ) {
-          this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} } ));
+          this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} }));
+        } else {
+          this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { silent: true } }));
         }
         this._silentDisconnect = false;
         this._socket = undefined;
@@ -816,7 +828,6 @@ websocket client for casper server
                     clearTimeout(timerId);
                     this._subscriptions.delete(channel);
                     this._freedInvokes.push(subscription.invokeId);
-                    console.log('--- Closing channel ', channel, ' open timerId=', timerId, ' invokeId', subscription.invokeId);
                   }
                   if (subscription.confirmed && subscription.handler) {
                     subscription.handler(notification);
@@ -934,14 +945,15 @@ websocket client for casper server
        * Initializes internal data structures
        */
       _initData () {
-        this._savedEmail      = undefined;  // The email used to sign-in
-        this._accessToken     = undefined;  // The current access token in use
-        this._pendingCommands = [];         // Commands waiting for session establishment
-        this._freedInvokes    = [];         // keeps the invokes that were returned by the server
-        this._activeRequests  = new Map();  // hash, key is the Invoke value the request in flight
-        this._documents       = new Map();
-        this._nextInvokeId    = 1;          // The next fresh invoke ID
-        this._subscriptions   = new Map();  // Registry of server subscriptions, key is channel
+        this._savedEmail          = undefined;  // The email used to sign-in
+        this._accessToken         = undefined;  // The current access token in use
+        this._pendingCommands     = [];         // Commands waiting for session establishment
+        this._freedInvokes        = [];         // keeps the invokes that were returned by the server
+        this._activeRequests      = new Map();  // hash, key is the Invoke value the request in flight
+        this._documents           = new Map();
+        this._nextInvokeId        = 1;          // The next fresh invoke ID
+        this._subscriptions       = new Map();  // Registry of server subscriptions, key is channel
+        this._applicationInactive = false;
       }
 
       /**
@@ -981,23 +993,42 @@ websocket client for casper server
         );
       }
 
-      _updateEmailNotifications (userEmail) {
-        if ( this._savedEmail !== userEmail ) {
-          // TODO unsubscribe email this._unsubscribeNotifications('email', _savedEmail);
-          this.subscribeNotifications('email', userEmail, function (notification) {
-            if ( notification.access_token && this._accessToken && this._accessToken !== notification.access_token ) {
-              console.log("Shoot dam user created a new session on my back!!! ", notification.access_token);
-            }
-          }.bind(this));
-        }
-      }
-
       userActivity (event) {
-        console.log('user Active ', event);
+        if ( this._applicationInactive === true ) {
+          this._applicationInactive = false;
+          this.checkIfSessionChanged();
+        }
+        this._startIdleTimer();
       }
 
       applicationInactive (event) {
-        console.log('application Inactive ', event);
+        this.checkIfSessionChanged();
+        this._applicationInactive = true;
+        this._startIdleTimer();
+      }
+
+      _startIdleTimer () {
+        clearTimeout(this._idleTimerId);
+        this._idleTimerId = setTimeout(e => this._userIdleTimeout(e), this.userIdleTimeout * 1000);
+      }
+
+      _userIdleTimeout (event) {
+        this._applicationInactive = true;
+        this._showOverlay({message: 'Sessão suspensa', icon: 'cloud', spinner: true, loading_icon: 'loading-icon-02' , opacity: 0.15});
+        this._silentDisconnect = true;
+        this.disconnect();
+      }
+
+      /**
+       * If the session in memory is not same we have saved in the cookie it means another browser window changed it
+       *
+       * @note This could mean the user changed the login account or selected another entity,
+       *       so the only safe action is to reload the page and start fresh with new session
+       */
+      checkIfSessionChanged () {
+        if (  this._accessToken !== undefined && this._accessToken !== this.sessionCookie ) {
+          window.location.reload();
+        }
       }
 
       //***************************************************************************************//
