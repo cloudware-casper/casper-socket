@@ -101,6 +101,11 @@ websocket client for casper server
         }
         this._sessionCookieParser = new RegExp('.*casper_session=([0-9a-zA-Z]+)');
         this._issuerCookieParser = new RegExp('.*casper_issuer=([:\/\.0-9a-zA-Z]+)');
+
+        this._boundMouseOutListener    = this._mouseOutListener.bind(this);
+        this._boundUserActivity        = this.userActivity.bind(this);
+        this._boundUserActivity        = this.userActivity.bind(this);
+        this._boundApplicationInactive = this.applicationInactive.bind(this);
       }
 
       connectedCallback () {
@@ -108,10 +113,10 @@ websocket client for casper server
         this._silentDisconnect = false;
         this._socket = undefined;
 
-        document.addEventListener('mouseout', e => this._mouseOutListener(e));
-        document.addEventListener('click',    e => this.userActivity(e));
-        document.addEventListener('keypress', e => this.userActivity(e));
-        window.addEventListener('blur',       e => this.applicationInactive(e));
+        document.addEventListener('mouseout', this._boundMouseOutListener);
+        document.addEventListener('click',    this._boundUserActivity);
+        document.addEventListener('keypress', this._boundUserActivity);
+        window.addEventListener('blur',       this._boundApplicationInactive);
       }
 
       _mouseOutListener (event) {
@@ -123,6 +128,10 @@ websocket client for casper server
       disconnectedCallback () {
         this._clearData();
         this.disconnect();
+        document.removeEventListener('mouseout', this._boundMouseOutListener);
+        document.removeEventListener('click',    this._boundUserActivity);
+        document.removeEventListener('keypress', this._boundUserActivity);
+        window.removeEventListener('blur',       this._boundApplicationInactive);
       }
 
       connect () {
@@ -338,6 +347,9 @@ websocket client for casper server
           if ( response.refresh_token ) {
             window.localStorage.setItem('casper-refresh-token', response.refresh_token);
           }
+          if ( response.entity_id ) {
+            window.localStorage.setItem('casper-last-entity-id', response.entity_id);
+          }
           if ( response.user_email ) {
             this._updateEmailNotifications(response.user_email);
             this.savedEmail = response.user_email;
@@ -427,6 +439,9 @@ websocket client for casper server
             }
             if ( response.refresh_token ) {
               window.localStorage.setItem('casper-refresh-token', response.refresh_token);
+            }
+            if ( response.entity_id ) {
+              window.localStorage.setItem('casper-last-entity-id', response.entity_id);
             }
           }
           response.url = this._switchResponse.url;
