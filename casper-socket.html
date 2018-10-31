@@ -2,20 +2,20 @@
 <!--
   - Copyright (c) 2014-2016 Cloudware S.A. All rights reserved.
   -
-  - This file is part of casper-common-ui.
+  - This file is part of casper-socket.
   -
-  - casper-common-ui is free software: you can redistribute it and/or modify
+  - casper-socket is free software: you can redistribute it and/or modify
   - it under the terms of the GNU Affero General Public License as published by
   - the Free Software Foundation, either version 3 of the License, or
   - (at your option) any later version.
   -
-  - casper-common-ui  is distributed in the hope that it will be useful,
+  - casper-socket  is distributed in the hope that it will be useful,
   - but WITHOUT ANY WARRANTY; without even the implied warranty of
   - MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   - GNU General Public License for more details.
   -
   - You should have received a copy of the GNU Affero General Public License
-  - along with casper-common-ui.  If not, see <http://www.gnu.org/licenses/>.
+  - along with casper-socket.  If not, see <http://www.gnu.org/licenses/>.
   -
  -->
 
@@ -123,6 +123,7 @@ websocket client for casper server
         this._silentDisconnect = false;
         this._socket           = undefined;
 
+        // ... install global listeners to detect user activity
         document.addEventListener('mouseout', this._boundMouseOutListener);
         document.addEventListener('click',    this._boundUserActivity);
         document.addEventListener('keypress', this._boundUserActivity);
@@ -138,6 +139,8 @@ websocket client for casper server
       disconnectedCallback () {
         this._clearData();
         this.disconnect();
+
+        // ... cleanup global listeners
         document.removeEventListener('mouseout', this._boundMouseOutListener);
         document.removeEventListener('click',    this._boundUserActivity);
         document.removeEventListener('keypress', this._boundUserActivity);
@@ -211,7 +214,13 @@ websocket client for casper server
       _submitJobResponse (response, request) {
         if ( response.success === true && response.channel ) {
           request.channel = response.channel;
-          this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true });
+          this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true, job: true });
+          if ( request.handler !== undefined ) {
+            if ( response.success === true && response.status_code === undefined ) {
+              response.status_code = 200;
+            }
+            request.handler(response);
+          }
         } else {
           request.handler({
               message: ['O servidor recusou o pedido, p.f. tente mais tarde'],
@@ -244,10 +253,15 @@ websocket client for casper server
         }
       }
 
-      cancelJob (jobId, callback) {
+      cancelJob (jobChannel, callback) {
+        let subscription = this._subscriptions.get(jobChannel);
+        if ( subscription ) {
+          clearTimeout(subscription.timer);
+          this._subscriptions.delete(jobChannel);
+        }
         let ivk = this._selectInvokeId();
         let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-        let p = jobId.split(':');
+        let p = jobChannel.split(':');
         let request = { tube: p[0], id: p[1], callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':CANCEL:' + JSON.stringify({ target: 'job-queue', tube: request.tube, id: request.id }));
         this._activeRequests.set(ivk, request);
@@ -331,8 +345,8 @@ websocket client for casper server
       /**
        * Send the command that sets the current session on the casper server websocket context
        *
-       * @param {String}   accessToken the session indentifier
-       * @param {function} callback function that will be called (bound to receiver)
+       * @param {String}   accessToken the session identifier
+       * @param {Function} callback function that will be called (bound to receiver)
        */
       _setSession (accessToken, callback) {
         this._accessToken = accessToken;
@@ -882,6 +896,8 @@ websocket client for casper server
                   }
                   this._activeRequests.delete(invokeId);
                   this._freedInvokes.push(invokeId);
+                } else {
+                  console.log(`keeping invoke ${invokeId} alive for channel ${payload.channel}`);
                 }
 
                 if ( payload && request.callback !== undefined ) {
@@ -905,25 +921,35 @@ websocket client for casper server
        * @param {Integer} invokeId the invoke identifier associated with the original request
        */
       _timeoutHandler (invokeId) {
+        let handled = false;
 
         console.log("**** Timeout for invoke ", invokeId);
 
         const request = this._activeRequests.get(invokeId);
         if ( request !== undefined ) {
+          if ( request.channel ) {
+            let subscription = this._subscriptions.get(request.channel);
+            if ( subscription && subscription.job === true && subscription.confirmed === true ) {
+              if ( window.app && window.app.wizard && window.app.wizard.channel === request.channel ) {
+                handled = true;
+                this._startIdleTimer();
+              }
+            }
+            this._subscriptions.delete(request.channel);
+          }
           if ( request.handler !== undefined ) {
             request.handler({
-              message: ['i18n_server_timeout'],
+              message: ['Tempo de espera ultrapassado'],
               status: 'error',
               status_code: 504
             });
           }
           this._activeRequests.delete(invokeId);
           this._freedInvokes.push(invokeId);
-          if ( request.channel ) {
-            this._subscriptions.delete(request.channel);
-          }
         }
-        this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
+        if ( ! handled ) {
+          this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
+        }
       }
 
       /**
@@ -937,7 +963,7 @@ websocket client for casper server
         }
         this._activeRequests.clear();
         this._documents.clear();
-        this._subscriptions.clear(); // TODO KEEP NOTIFICATIONS
+        this._subscriptions.clear(); // TODO KEEP NOTIFICATIONSzzzzzz
         this._initData();
       }
 
@@ -993,6 +1019,11 @@ websocket client for casper server
         );
       }
 
+      /**
+       * This method should be called whenever the user does a click or presses a key.
+       *
+       * @param {Object} The event created by user activity
+       */
       userActivity (event) {
         if ( this._applicationInactive === true ) {
           this._applicationInactive = false;
@@ -1001,26 +1032,45 @@ websocket client for casper server
         this._startIdleTimer();
       }
 
+      /**
+       * This method should be called when window becomes inactive, un-blurred or mouse goes out
+       *
+       * @param {Object} The event created by user activity
+       */
       applicationInactive (event) {
         this.checkIfSessionChanged();
         this._applicationInactive = true;
         this._startIdleTimer();
       }
 
+      /**
+       * Initiate or restart the idle timer that suspends the session on user inactivity
+       */
       _startIdleTimer () {
         clearTimeout(this._idleTimerId);
         this._idleTimerId = setTimeout(e => this._userIdleTimeout(e), this.userIdleTimeout * 1000);
       }
 
+      /**
+       * Handler for user inactivity timeout
+       *
+       * @note Suspension is prevented when a wizard is opened or generally speaking a server job is pending
+       */
       _userIdleTimeout (event) {
+        for ( let subscription of this._subscriptions.values() ) {
+          if ( subscription.confirmed === true && subscription.job === true ) {
+            console.warn('refusing to go idle because at least one job subscription is active');
+            return;
+          }
+        }
         this._applicationInactive = true;
-        this._showOverlay({message: 'Sessão suspensa', icon: 'cloud', spinner: true, loading_icon: 'loading-icon-02' , opacity: 0.15});
+        this._showOverlay({message: 'Sessão suspensa por inactividade', icon: 'cloud', spinner: true, loading_icon: 'loading-icon-05' , opacity: 0.15});
         this._silentDisconnect = true;
         this.disconnect();
       }
 
       /**
-       * If the session in memory is not same we have saved in the cookie it means another browser window changed it
+       * If the session in memory is not same we have saved in the cookie it means another browser window/tab changed it
        *
        * @note This could mean the user changed the login account or selected another entity,
        *       so the only safe action is to reload the page and start fresh with new session
@@ -1070,9 +1120,9 @@ websocket client for casper server
       /**
        * Save session cookie with the current access token
        *
-       * @param accessToken the access token generated by the server
-       * @param ttl Time to live how long the token should live in seconds
-       * @param issuer_url the URL of the server that issued the access token
+       * @param {String} accessToken the access token generated by the server
+       * @param {Number} ttl Time to live how long the token should live in seconds
+       * @param {String} issuer_url the URL of the server that issued the access token
        */
       saveSessionCookie (accessToken, ttl, issuer_url) {
         this.saveCookie('casper_session', accessToken, ttl);
