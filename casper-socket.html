@@ -77,12 +77,12 @@ websocket client for casper server
           /** Time the web socket is kept open after the user becomes idle, must be less than sessionRenewTimeout */
           userIdleTimeout: {
             type: Number,
-            value: 10 // 5 * 60
+            value: 20
           },
-          /** Time between session renewals must be less than the access token duration */
-          sessionRenewTimeout: {
+          /** Lower limit for session time to live, when the ttl gets bellow this the session will be refreshed */
+          sessionRenewTolerance: {
             type: Number,
-            value: 10 // 5 * 60
+            value: 3500
           }
         }
       }
@@ -109,8 +109,9 @@ websocket client for casper server
           }
           this.cookieDomain = domain.join('.');
         }
-        this._sessionCookieParser = new RegExp('.*casper_session=([0-9a-zA-Z]+)');
-        this._issuerCookieParser = new RegExp('.*casper_issuer=([:\/\.0-9a-zA-Z]+)');
+        this._sessionCookieParser  = new RegExp('.*casper_session=([0-9a-zA-Z]+)');
+        this._issuerCookieParser   = new RegExp('.*casper_issuer=([:\/\.0-9a-zA-Z]+)');
+        this._validityCookieParser = new RegExp('.*casper_validity=([0-9]+)');
 
         this._boundMouseOutListener    = this._mouseOutListener.bind(this);
         this._boundUserActivity        = this.userActivity.bind(this);
@@ -215,10 +216,7 @@ websocket client for casper server
         if ( response.success === true && response.channel ) {
           request.channel = response.channel;
           this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true, job: true });
-          if ( request.handler !== undefined ) {
-            if ( response.success === true && response.status_code === undefined ) {
-              response.status_code = 200;
-            }
+          if ( request.handler !== undefined && response.status_code !== undefined && response.status !== undefined ) {
             request.handler(response);
           }
         } else {
@@ -349,6 +347,7 @@ websocket client for casper server
        * @param {Function} callback function that will be called (bound to receiver)
        */
       _setSession (accessToken, callback) {
+        this._showOverlay({message: 'Validação sessão em curso', icon: 'connecting', spinner: true, loading_icon: 'loading-icon-03'});
         this._accessToken = accessToken;
         let ivk = this._selectInvokeId();
         let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
@@ -370,6 +369,8 @@ websocket client for casper server
         } else {
           if ( response.refresh_token ) {
             window.localStorage.setItem('casper-refresh-token', response.refresh_token);
+          } else {
+            window.localStorage.removeItem('casper-refresh-token');
           }
           if ( response.entity_id ) {
             window.localStorage.setItem('casper-last-entity-id', response.entity_id);
@@ -377,6 +378,7 @@ websocket client for casper server
           if ( response.user_email ) {
             this.savedEmail = response.user_email;
           }
+          this._accessValidity = this.sessionValidity; // read back from cookie
           this._startIdleTimer();
           this.dispatchEvent(new CustomEvent('casper-signed-in', { bubbles: true, composed: true, detail: response }));
         }
@@ -390,21 +392,30 @@ websocket client for casper server
           this._extendSessionResponse.bind(this), {
             ttr: Math.max(this.defaultTimeout - 5, 5),
             validity: this.defaultTimeout,
-            timeout: this.defaultTimeout
+            timeout: this.defaultTimeout,
+            overlay: {
+              message: 'Renovação sessão iniciada',
+              icon:'connecting',
+              spinner: true,
+              loading_icon: 'loading-icon-03'
+            }
           }
         );
       }
 
       _extendSessionResponse (response) {
-        if ( response.status === 'completed' && response.status_code === 200 ) {
-          this.saveSessionCookie(response.response.access_token, response.response.access_ttl, response.response.issuer_url);
-          this.validateSession();
-          return;
-        } else {
+        if ( response.status_code !== 200 || (response.success !== undefined && response.success !== true) ) {
           window.location = '/login';
+        } else if ( response.status === 'completed' && response.status_code === 200 ) {
+          if ( response.response === undefined ) {
+            window.location = '/login';
+          } else {
+            this._accessToken = response.response.access_token;
+            this.saveSessionCookie(response.response.access_token, response.response.access_ttl, response.response.issuer_url);
+            this.validateSession();
+          }
         }
       }
-
 
       //***************************************************************************************//
       //                                                                                       //
@@ -421,9 +432,9 @@ websocket client for casper server
             url:           redirectUrl       // URL to load after the switch is made
           },
           this._switchEntityListener.bind(this), {
-            ttr: 60,
-            validity: 70,
-            timeout: 10,
+            ttr: Math.max(this.defaultTimeout - 5, 5),
+            validity: this.defaultTimeout,
+            timeout: this.defaultTimeout,
             overlay: {
               message: 'A mudar de empresa',
               spinner: true,
@@ -445,7 +456,7 @@ websocket client for casper server
             window.location = notification.response.url;
           }
         } else {
-          this._showOverlay({message: 'falhou a mudança de empresa', icon: 'error' });
+          this._showOverlay({message: 'Falha na mudança de empresa', icon: 'error' });
         }
       }
 
@@ -455,13 +466,16 @@ websocket client for casper server
           this.dispatchEvent(new CustomEvent('casper-signed-out', {bubbles: true, composed: true}));
         } else {
           if ( this._switchResponse !== undefined ) {
-            this._accessToken = this._switchResponse.access_token;
+            this._accessToken    = this._switchResponse.access_token;
+            this._accessValidity = (new Date().valueOf())/ 1000 + this._switchResponse.access_ttl; // same value saved on casper-validity cookie
             this.saveSessionCookie(this._switchResponse.access_token, this._switchResponse.access_ttl, this._switchResponse.issuer_url);
             if ( this._switchResponse.user_email ) {
               this.savedEmail = this._switchResponse.user_email;
             }
             if ( response.refresh_token ) {
               window.localStorage.setItem('casper-refresh-token', response.refresh_token);
+            } else {
+              window.localStorage.removeItem('casper-refresh-token');
             }
             if ( response.entity_id ) {
               window.localStorage.setItem('casper-last-entity-id', response.entity_id);
@@ -522,6 +536,7 @@ websocket client for casper server
         let options = { target: "document" }
         this._send(ivk + ':OPEN:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       loadDocument (chapterModel, clientCallback) {
@@ -531,6 +546,7 @@ websocket client for casper server
         let options = { target: "document", id: chapterModel.id }
         this._send(ivk + ':LOAD:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       reloadDocument (id, callback) {
@@ -540,6 +556,7 @@ websocket client for casper server
         let options = { target: "document", id: id }
         this._send(ivk + ':RELOAD:' + JSON.stringify(options));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       closeDocument (id, callback) {
@@ -567,6 +584,7 @@ websocket client for casper server
         }
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       moveCursor (id, motion, callback) {
@@ -577,6 +595,7 @@ websocket client for casper server
         let command = { input: { motion: motion }};
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       setText (id, value, motion, callback) {
@@ -590,6 +609,7 @@ websocket client for casper server
         }
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       setTextT (id, value, motion, final, callback) {
@@ -603,6 +623,7 @@ websocket client for casper server
         }
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       sendClick (id, x, y, callback) {
@@ -613,6 +634,7 @@ websocket client for casper server
         let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       gotoPage (id, pageNumber, focus, callback) {  // focus???
@@ -621,9 +643,9 @@ websocket client for casper server
         let options = { target: "document", id: id };
         let command = { properties: { page: pageNumber }};
         let request = { callback: callback, timer: tid, invokeId: ivk };
-
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       setScale (id, scale, callback) {
@@ -654,6 +676,7 @@ websocket client for casper server
         let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       getNotifications (channel, callback) {
@@ -671,7 +694,7 @@ websocket client for casper server
                }
              }.bind(this)
           };
-        let options = { target: "notifications", channel: channel };
+        let options = { target: 'notifications', channel: channel };
         this._send(ivk + ':GET:' + JSON.stringify(options));
         this._activeRequests.set(ivk, request);
       }
@@ -732,6 +755,7 @@ websocket client for casper server
         let request = { callback: callback, timer: tid, invokeId: ivk  };
         this._send(ivk + ':GET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       addBand (id, type, bandId, callback) {
@@ -752,6 +776,7 @@ websocket client for casper server
         let request = { callback: callback, timer: tid, invokeId: ivk };
         this._send(ivk + ':REMOVE:' + JSON.stringify(options) + ':' + JSON.stringify(command));
         this._activeRequests.set(ivk, request);
+        this.userActivity();
       }
 
       //***************************************************************************************//
@@ -971,15 +996,16 @@ websocket client for casper server
        * Initializes internal data structures
        */
       _initData () {
-        this._savedEmail          = undefined;  // The email used to sign-in
-        this._accessToken         = undefined;  // The current access token in use
-        this._pendingCommands     = [];         // Commands waiting for session establishment
-        this._freedInvokes        = [];         // keeps the invokes that were returned by the server
-        this._activeRequests      = new Map();  // hash, key is the Invoke value the request in flight
-        this._documents           = new Map();
-        this._nextInvokeId        = 1;          // The next fresh invoke ID
-        this._subscriptions       = new Map();  // Registry of server subscriptions, key is channel
-        this._applicationInactive = false;
+        this._savedEmail           = undefined;  // The email used to sign-in
+        this._accessToken          = undefined;  // The current access token in use
+        this._accessValidity       = undefined;  // Last second of session validity in EPOCH (approximation)
+        this._pendingCommands      = [];         // Commands waiting for session establishment
+        this._freedInvokes         = [];         // keeps the invokes that were returned by the server
+        this._activeRequests       = new Map();  // hash, key is the Invoke value the request in flight
+        this._documents            = new Map();
+        this._nextInvokeId         = 1;          // The next fresh invoke ID
+        this._subscriptions        = new Map();  // Registry of server subscriptions, key is channel
+        this._applicationInactive  = false;
       }
 
       /**
@@ -1022,7 +1048,7 @@ websocket client for casper server
       /**
        * This method should be called whenever the user does a click or presses a key.
        *
-       * @param {Object} The event created by user activity
+       * @param {Object} The event created by user activity (ignored)
        */
       userActivity (event) {
         if ( this._applicationInactive === true ) {
@@ -1030,6 +1056,15 @@ websocket client for casper server
           this.checkIfSessionChanged();
         }
         this._startIdleTimer();
+        if ( this._accessValidity !== undefined ) {
+
+          let now = new Date().valueOf()/1000;
+          console.log('TTL is ~', this._accessValidity - now );
+          if ( this._accessValidity - now < this.sessionRenewTolerance ) {
+            this.extendSession();
+            this._accessValidity = undefined;
+          }
+        }
       }
 
       /**
@@ -1078,6 +1113,8 @@ websocket client for casper server
       checkIfSessionChanged () {
         if (  this._accessToken !== undefined && this._accessToken !== this.sessionCookie ) {
           window.location.reload();
+        } else {
+          this._startIdleTimer();
         }
       }
 
@@ -1129,6 +1166,9 @@ websocket client for casper server
         if ( issuer_url ) {
           this.saveCookie('casper_issuer', issuer_url);
         }
+        if ( ttl ) {
+          this.saveCookie('casper_validity',  (new Date().valueOf())/ 1000 + ttl, ttl);
+        }
       }
 
       /**
@@ -1148,8 +1188,20 @@ websocket client for casper server
        */
       get issuerUrl () {
         const match = this._issuerCookieParser.exec(document.cookie);
-        if ( match && match.length === 2 && match[1].length >= 16 ) {
+        if ( match && match.length === 2 && match[1].length >= 10 ) {
           return match[1];
+        } else {
+          return undefined;
+        }
+      }
+
+      /**
+       * Retrieve the session validity in epoch seconds
+       */
+      get sessionValidity () {
+        const match = this._validityCookieParser.exec(document.cookie);
+        if ( match && match.length === 2 && match[1].length >= 10) {
+          return parseInt(match[1]);
         } else {
           return undefined;
         }
@@ -1160,6 +1212,7 @@ websocket client for casper server
        */
       deleteSessionCookie () {
         this.deleteCookie('casper_session');
+        this.deleteCookie('casper_validity');
       }
 
       /**
