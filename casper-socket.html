@@ -32,6 +32,7 @@ websocket client for casper server
 <dom-module id="casper-socket">
 
   <script>
+    "use strict";
 
     class CasperSocket extends Polymer.Element {
 
@@ -110,7 +111,7 @@ websocket client for casper server
           this.cookieDomain = domain.join('.');
         }
         this._sessionCookieParser  = new RegExp('.*casper_session=([0-9a-zA-Z]+)');
-        this._issuerCookieParser   = new RegExp('.*casper_issuer=([:\/\.0-9a-zA-Z]+)');
+        this._issuerCookieParser   = new RegExp('.*casper_issuer=');
         this._validityCookieParser = new RegExp('.*casper_validity=([0-9]+)');
 
         this._boundMouseOutListener    = this._mouseOutListener.bind(this);
@@ -948,7 +949,7 @@ websocket client for casper server
       _timeoutHandler (invokeId) {
         let handled = false;
 
-        console.log("**** Timeout for invoke ", invokeId);
+        console.warn("**** Timeout for invoke ", invokeId);
 
         const request = this._activeRequests.get(invokeId);
         if ( request !== undefined ) {
@@ -1099,7 +1100,7 @@ websocket client for casper server
           }
         }
         this._applicationInactive = true;
-        this._showOverlay({message: 'Sessão suspensa por inactividade', icon: 'cloud', spinner: true, loading_icon: 'loading-icon-05' , opacity: 0.15});
+        this._showOverlay({message: 'Sessão suspensa por inatividade', icon: 'cloud', spinner: true, loading_icon: 'loading-icon-05' , opacity: 0.15});
         this._silentDisconnect = true;
         this.disconnect();
       }
@@ -1187,11 +1188,16 @@ websocket client for casper server
        * Retrieve the URL of the machine that issued the last token
        */
       get issuerUrl () {
-        const match = this._issuerCookieParser.exec(document.cookie);
-        if ( match && match.length === 2 && match[1].length >= 10 ) {
-          return match[1];
-        } else {
+        const jar   = document.cookie;
+        const start = jar.indexOf('casper_issuer=') + 'casper_issuer='.length;
+        if ( start === -1 ) {
           return undefined;
+        }
+        let end = jar.indexOf(';', start);
+        if ( end === -1 ) {
+          return jar.substring(start,jar.length);
+        } else {
+          return jar.substring(start,end);
         }
       }
 
