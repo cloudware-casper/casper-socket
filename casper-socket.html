@@ -110,9 +110,6 @@ websocket client for casper server
           }
           this.cookieDomain = domain.join('.');
         }
-        this._sessionCookieParser  = new RegExp('.*casper_session=([0-9a-zA-Z]+)');
-        this._issuerCookieParser   = new RegExp('.*casper_issuer=');
-        this._validityCookieParser = new RegExp('.*casper_validity=([0-9]+)');
 
         this._boundMouseOutListener    = this._mouseOutListener.bind(this);
         this._boundUserActivity        = this.userActivity.bind(this);
@@ -1176,28 +1173,43 @@ websocket client for casper server
        * Retrieve the session cookie that contains the access token aka casper-session
        */
       get sessionCookie () {
-        const match = this._sessionCookieParser.exec(document.cookie);
-        if ( match && match.length === 2 && match[1].length >= 16 ) {
-          return match[1];
-        } else {
-          return undefined;
-        }
+        return CasperSocket.readCookie('casper_session', 64);
       }
 
       /**
        * Retrieve the URL of the machine that issued the last token
        */
       get issuerUrl () {
-        const jar   = document.cookie;
-        const start = jar.indexOf('casper_issuer=') + 'casper_issuer='.length;
+        return CasperSocket.readCookie('casper_issuer', 10);
+      }
+
+      /**
+       * Read back a cookie from the cookie jar
+       *
+       * @param cookie name of the key
+       * @param minLength minimum length of the cookie
+       * @return cookie value or undefined if the cookie does not exist or it's too short
+       */
+      static readCookie (cookie, minLength) {
+        let value;
+        let jar = document.cookie;
+        let start = jar.indexOf(cookie+'=');
+
         if ( start === -1 ) {
           return undefined;
+        } else {
+          start += cookie.length + 1;
         }
         let end = jar.indexOf(';', start);
         if ( end === -1 ) {
-          return jar.substring(start,jar.length);
+          value = jar.substring(start,jar.length);
         } else {
-          return jar.substring(start,end);
+          value = jar.substring(start,end);
+        }
+        if ( minLength === undefined ) {
+          return value;
+        } else {
+          return value.length >= minLength ? value : undefined;
         }
       }
 
@@ -1205,12 +1217,8 @@ websocket client for casper server
        * Retrieve the session validity in epoch seconds
        */
       get sessionValidity () {
-        const match = this._validityCookieParser.exec(document.cookie);
-        if ( match && match.length === 2 && match[1].length >= 10) {
-          return parseInt(match[1]);
-        } else {
-          return undefined;
-        }
+        let validity = parseInt(CasperSocket.readCookie('casper_validity', 10));
+        return validity > 0 ? validity : undefined;
       }
 
       /**
