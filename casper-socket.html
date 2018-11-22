@@ -113,7 +113,6 @@ websocket client for casper server
 
         this._boundMouseOutListener    = this._mouseOutListener.bind(this);
         this._boundUserActivity        = this.userActivity.bind(this);
-        this._boundUserActivity        = this.userActivity.bind(this);
         this._boundApplicationInactive = this.applicationInactive.bind(this);
       }
 
@@ -124,7 +123,7 @@ websocket client for casper server
 
         // ... install global listeners to detect user activity
         document.addEventListener('mouseout', this._boundMouseOutListener);
-        document.addEventListener('click',    this._boundUserActivity);
+        //document.addEventListener('click',    this._boundUserActivity);
         document.addEventListener('keypress', this._boundUserActivity);
         window.addEventListener('blur',       this._boundApplicationInactive);
       }
@@ -141,7 +140,7 @@ websocket client for casper server
 
         // ... cleanup global listeners
         document.removeEventListener('mouseout', this._boundMouseOutListener);
-        document.removeEventListener('click',    this._boundUserActivity);
+        //document.removeEventListener('click',    this._boundUserActivity);
         document.removeEventListener('keypress', this._boundUserActivity);
         window.removeEventListener('blur',       this._boundApplicationInactive);
       }
