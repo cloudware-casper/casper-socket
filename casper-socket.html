@@ -75,7 +75,7 @@ websocket client for casper server
             type: Number,
             value: 10
           },
-          /** Time the web socket is kept open after the user becomes idle, must be less than sessionRenewTimeout */
+          /** Time the web socket is kept open after the user becomes idle, must be less than sessionRenewTolerance */
           userIdleTimeout: {
             type: Number,
             value: 20
@@ -1097,7 +1097,7 @@ websocket client for casper server
           }
         }
         this._applicationInactive = true;
-        this._showOverlay({message: 'Sessão suspensa por inatividade', icon: 'cloud', spinner: true, loading_icon: 'loading-icon-05' , opacity: 0.15});
+        this._showOverlay({message: 'Sessão suspensa por inatividade', icon: 'cloud', opacity: 0.15});
         this._silentDisconnect = true;
         this.disconnect();
       }
