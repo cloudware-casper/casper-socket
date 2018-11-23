@@ -209,10 +209,12 @@ websocket client for casper server
         this._activeRequests.set(ivk, request);
       }
 
-      _submitJobResponse (response, request) {
+      _submitJobResponse (response, request, subscribe) {
         if ( response.success === true && response.channel ) {
           request.channel = response.channel;
-          this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true, job: true });
+          if ( subscribe ) {
+            this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true, job: true });
+          }
           if ( request.handler !== undefined && response.status_code !== undefined && response.status !== undefined ) {
             request.handler(response);
           }
@@ -235,10 +237,15 @@ websocket client for casper server
         this._activeRequests.set(ivk, request);
       }
 
-      _subscribeJobResponse (response, request) {
-        request.channel = response.channel;
+      _subscribeJobResponse (response, request, subscribe) {
         if ( response.success === true && response.channel ) {
-          this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true });
+          request.channel = response.channel;
+          if ( request.handler !== undefined && response.status !== undefined ) { // Note persistent jobs don't send status_code, don't test it
+            request.handler(response);
+          }
+          if ( subscribe ) {
+            this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true });
+          }
         } else {
           request.handler({
               message: ['O servidor recusou o pedido, p.f. tente mais tarde'],
@@ -836,7 +843,7 @@ websocket client for casper server
         try {
           let request, payload, invokeId, timerId, releaseInvoke = true;
 
-          const data  = message.data;
+          let data  = message.data;
           const start = data.indexOf('0:N:{');
           if ( start === 0 ) {
             const end = data.indexOf('"}:{"');
@@ -898,7 +905,7 @@ websocket client for casper server
             } else {
               request = this._activeRequests.get(invokeId);
               if ( request !== undefined ) {
-                let payload_start;
+                let payload_start, subscribe;
 
                 timerId = request.timer;
                 if ( (payload_start = data.indexOf(':R:{')) === offset ) {
@@ -918,12 +925,14 @@ websocket client for casper server
                   }
                   this._activeRequests.delete(invokeId);
                   this._freedInvokes.push(invokeId);
+                  subscribe = false;
                 } else {
                   console.log(`keeping invoke ${invokeId} alive for channel ${payload.channel}`);
+                  subscribe = true;
                 }
 
                 if ( payload && request.callback !== undefined ) {
-                  request.callback(payload, request);
+                  request.callback(payload, request, subscribe);
                   return;
                 }
               } else {
