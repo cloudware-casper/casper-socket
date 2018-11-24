@@ -161,6 +161,7 @@ websocket client for casper server
        * Terminate connection to casper server
        */
       disconnect () {
+        this._clearData();
         if ( this._socket ) {
           this._socket.close();
           this._socket = undefined;
@@ -563,7 +564,7 @@ websocket client for casper server
         this.userActivity();
       }
 
-      closeDocument (id, callback) {
+      closeDocument (id, reload, callback) {
         let ivk = this._selectInvokeId();
         let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
         let request = { callback: callback, timer: tid, invokeId: ivk };
@@ -572,6 +573,9 @@ websocket client for casper server
           options = { target: "document", id: id }
         } else {
           options = { target: "document" }
+        }
+        if ( reload !== undefined && reload === false ) {
+          options.reload = false;
         }
         this._send(ivk + ':CLOSE:' + JSON.stringify(options));
         this._activeRequests.set(ivk, request);
@@ -743,6 +747,15 @@ websocket client for casper server
         this._activeRequests.set(ivk, request);*/
       }
 
+      getData (urn, timeout, callback) {
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000);
+        let options = { target: "jsonapi", urn: urn };
+        let request = { callback: callback, timer: tid, invokeId: ivk  };
+        this._send(ivk + ':GET:' + JSON.stringify(options));
+        this._activeRequests.set(ivk, request);
+      }
+
       /**
        * Requests the server side hint for the current hovering point
        *
@@ -797,7 +810,7 @@ websocket client for casper server
       _send (message) {
         if ( this._socket === undefined || this._socket.readyState !== 1 ) {
           this._pendingCommands.push(message);
-          this.connect()
+          this.connect();
         } else if (this._socket.readyState === 1 ) {
           this._socket.send(message);
         }
@@ -810,7 +823,15 @@ websocket client for casper server
         if ( this._freedInvokes.length === 0 ) {
           return this._nextInvokeId++;
         } else {
-          return this._freedInvokes.shift()
+          return this._freedInvokes.shift();
+        }
+      }
+
+      _freeInvokeId (invoke) {
+        if ( !isNaN(invoke) ) {
+          this._freedInvokes.push(invoke);
+        } else {
+          debugger;
         }
       }
 
@@ -870,7 +891,7 @@ websocket client for casper server
                     }
                     clearTimeout(timerId);
                     this._subscriptions.delete(channel);
-                    this._freedInvokes.push(subscription.invokeId);
+                    this._freeInvokeId(subscription.invokeId);
                   }
                   if (subscription.confirmed && subscription.handler) {
                     subscription.handler(notification);
@@ -924,7 +945,7 @@ websocket client for casper server
                     clearTimeout(timerId);
                   }
                   this._activeRequests.delete(invokeId);
-                  this._freedInvokes.push(invokeId);
+                  this._freeInvokeId(invokeId);
                   subscribe = false;
                 } else {
                   console.log(`keeping invoke ${invokeId} alive for channel ${payload.channel}`);
@@ -936,7 +957,7 @@ websocket client for casper server
                   return;
                 }
               } else {
-                this._freedInvokes.push(invokeId);
+                this._freeInvokeId(invokeId);
               }
             }
           }
@@ -976,7 +997,7 @@ websocket client for casper server
             });
           }
           this._activeRequests.delete(invokeId);
-          this._freedInvokes.push(invokeId);
+          this._freeInvokeId(invokeId);
         }
         if ( ! handled ) {
           this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
