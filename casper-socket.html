@@ -707,7 +707,20 @@ websocket client for casper server
         this._activeRequests.set(ivk, request);
       }
 
+      _clearUniqueNotifications (channel, id) {
+        if ( ['company', 'email'].includes(channel) ) {
+          this._subscriptions.forEach(function(subscription, key, map) {
+            let a = key.split(':')
+
+            if ( a[0] === channel && a[1] !== id ) {
+              this._unsubscribeNotifications(a[0], a[1]);
+            }
+          }.bind(this));
+        }
+      }
+
       subscribeNotifications (channel, id, handler) {
+        this._clearUniqueNotifications(channel, id);
         let ivk = this._selectInvokeId();
         let chn = channel + ':' + id;
         let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
@@ -740,11 +753,12 @@ websocket client for casper server
         }
       }
 
-      _unsubscribeNotifications (channel, id, handler) {
-        /*let ivk = this._selectInvokeId();
-        let request = { callback: callback, timer: tid, invokeId: ivk };
+      _unsubscribeNotifications (channel, id) {
+        let ivk = this._selectInvokeId();
+        let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+        let request = { timer: tid, invokeId: ivk };
         this._send(ivk + ':UNSUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id }));
-        this._activeRequests.set(ivk, request);*/
+        this._activeRequests.set(ivk, request);
       }
 
       getData (urn, timeout, callback) {
@@ -841,6 +855,14 @@ websocket client for casper server
             this._socket.send(message);
           }
           this._pendingCommands = [];
+          if ( this._subscriptions ) {
+            this._subscriptions.forEach(function(subscription, key, map) {
+              if ( subscription.notification && subscription.confirmed ) {
+                let a = key.split(':');
+                this.subscribeNotifications(a[0], a[1], subscription.handler);
+              }
+            }.bind(this));
+          }
         }
         this.dispatchEvent(new CustomEvent('casper-connected', {bubbles: true, composed: true}));
       }
@@ -1015,14 +1037,18 @@ websocket client for casper server
         }
         this._activeRequests.clear();
         this._documents.clear();
-        this._subscriptions.clear(); // TODO KEEP NOTIFICATIONSzzzzzz
-        this._initData();
+        this._subscriptions.forEach(function (subscription, channel, subs) {
+          if ( ! (subscription.notification && subscription.confirmed) ) {
+            map.delete(key);
+          }
+        });
+        this._initData(false);
       }
 
       /**
        * Initializes internal data structures
        */
-      _initData () {
+      _initData (clearSubs) {
         this._savedEmail           = undefined;  // The email used to sign-in
         this._accessToken          = undefined;  // The current access token in use
         this._accessValidity       = undefined;  // Last second of session validity in EPOCH (approximation)
@@ -1031,7 +1057,9 @@ websocket client for casper server
         this._activeRequests       = new Map();  // hash, key is the Invoke value the request in flight
         this._documents            = new Map();
         this._nextInvokeId         = 1;          // The next fresh invoke ID
-        this._subscriptions        = new Map();  // Registry of server subscriptions, key is channel
+        if ( this._subscriptions === undefined || clearSubs === true ) {
+          this._subscriptions = new Map();      // Registry of server subscriptions, key is channel
+        }
         this._applicationInactive  = false;
       }
 
