@@ -379,6 +379,7 @@ websocket client for casper server
           }
           if ( response.entity_id ) {
             window.localStorage.setItem('casper-last-entity-id', response.entity_id);
+            this._manageNotifications(response.entity_id);
           }
           if ( response.user_email ) {
             this.savedEmail = response.user_email;
@@ -386,6 +387,26 @@ websocket client for casper server
           this._accessValidity = this.sessionValidity; // read back from cookie
           this._startIdleTimer();
           this.dispatchEvent(new CustomEvent('casper-signed-in', { bubbles: true, composed: true, detail: response }));
+        }
+      }
+
+      _manageNotifications (entity_id) {
+        if ( this._subscriptions ) {
+          this._subscriptions.forEach(function(subscription, key, map) {
+            if ( subscription.notification && subscription.confirmed ) {
+              let a = key.split(':');
+
+              if ( a[0] === 'company' ) {
+                if ( a[1] == entity_id && subscription.handler ) {
+                  this.subscribeNotifications(a[0], a[1], subscription.handler);
+                } else {
+                  this._unsubscribeNotifications(a[0], a[1]);
+                }
+              } else {
+                this.subscribeNotifications(a[0], a[1], subscription.handler);
+              }
+            }
+          }.bind(this));
         }
       }
 
@@ -484,6 +505,7 @@ websocket client for casper server
             }
             if ( response.entity_id ) {
               window.localStorage.setItem('casper-last-entity-id', response.entity_id);
+              this._manageNotifications(response.entity_id);
             }
           }
           response.url = this._switchResponse.url;
@@ -707,20 +729,7 @@ websocket client for casper server
         this._activeRequests.set(ivk, request);
       }
 
-      _clearUniqueNotifications (channel, id) {
-        if ( ['company', 'email'].includes(channel) ) {
-          this._subscriptions.forEach(function(subscription, key, map) {
-            let a = key.split(':')
-
-            if ( a[0] === channel && a[1] !== id ) {
-              this._unsubscribeNotifications(a[0], a[1]);
-            }
-          }.bind(this));
-        }
-      }
-
       subscribeNotifications (channel, id, handler) {
-        this._clearUniqueNotifications(channel, id);
         let ivk = this._selectInvokeId();
         let chn = channel + ':' + id;
         let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
@@ -855,14 +864,6 @@ websocket client for casper server
             this._socket.send(message);
           }
           this._pendingCommands = [];
-          if ( this._subscriptions ) {
-            this._subscriptions.forEach(function(subscription, key, map) {
-              if ( subscription.notification && subscription.confirmed ) {
-                let a = key.split(':');
-                this.subscribeNotifications(a[0], a[1], subscription.handler);
-              }
-            }.bind(this));
-          }
         }
         this.dispatchEvent(new CustomEvent('casper-connected', {bubbles: true, composed: true}));
       }
