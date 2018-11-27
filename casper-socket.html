@@ -870,7 +870,8 @@ websocket client for casper server
 
       _onSocketClose (event) {
         if ( this._silentDisconnect !== true ) {
-          this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} }));
+          // this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: 'casper-disconnected', icon: 'sleep'} }));
+          this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { message: '', icon: 'sleep'} }));
         } else {
           this.dispatchEvent(new CustomEvent('casper-disconnected', {bubbles: true, composed: true, detail: { silent: true } }));
         }
