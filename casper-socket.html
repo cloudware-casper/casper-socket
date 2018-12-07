@@ -352,7 +352,7 @@ websocket client for casper server
        * @param {Function} callback function that will be called (bound to receiver)
        */
       _setSession (accessToken, callback) {
-        this._showOverlay({message: 'Validação sessão em curso', icon: 'connecting', spinner: true, loading_icon: 'loading-icon-03'});
+        this._showOverlay({message: 'Validação de sessão em curso', icon: 'connecting', spinner: true, loading_icon: 'loading-icon-03'});
         this._accessToken = accessToken;
         let ivk = this._selectInvokeId();
         let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
