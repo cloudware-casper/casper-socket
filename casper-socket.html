@@ -282,7 +282,9 @@ websocket client for casper server
             this.saveSessionCookie(notification.response.access_token, notification.response.access_ttl, notification.response.issuer_url);
             this._silentDisconnect = true;
             this.disconnect();
-            window.location = notification.response.url;
+            if ( notification.response.url !== undefined ) {
+              window.location = notification.response.url;
+            }
           } else if ( notification.status === 'error' ) {
             if ( notification.status_code === 401 ) {
               this.dispatchEvent(new CustomEvent('casper-forbidden', {bubbles: true, composed: true, detail: { message: notification.message }}));
@@ -481,7 +483,9 @@ websocket client for casper server
           } else {
             // ... we moved to another cluster ...
             this.saveSessionCookie(notification.response.access_token, notification.response.access_ttl, notification.response.issuer_url);
-            window.location = notification.response.url;
+            if ( notification.response.url !== undefined ) {
+              window.location = notification.response.url;
+            }
           }
         } else {
           this._showOverlay({message: 'Falha na mudança de empresa', icon: 'error' });
