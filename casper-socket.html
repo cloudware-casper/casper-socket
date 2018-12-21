@@ -191,7 +191,7 @@ websocket client for casper server
 
         let target  = {target: 'job-queue', tube: job.tube};
         if ( options ) {
-          if ( options.ttr ) {
+          if ( options.ttr !== undefined ) {
             target.ttr = options.ttr;
           }
           if ( options.validity ) {
