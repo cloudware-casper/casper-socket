@@ -189,6 +189,12 @@ websocket client for casper server
         job['subentity_prefix'] = null;
         job['user_email']       = null;
 
+        if ( this.extraOptions !== undefined ) {
+          this.extraOptions.forEach((elem) => {
+            job[elem.key] = elem.value;
+          });
+        }
+
         let target  = {target: 'job-queue', tube: job.tube};
         if ( options ) {
           if ( options.ttr !== undefined ) {
