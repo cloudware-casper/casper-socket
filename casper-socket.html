@@ -564,21 +564,29 @@ websocket client for casper server
                                     if ( undefined != response.id ) {
                                       this._documents.set(response.id, documentHandler);
                                     }
+                                    this._dismissOverlay();
                                     clientCallback(response);
                                   }.bind(this) };
         let options = { target: "document" }
         this._send(ivk + ':OPEN:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
         this._activeRequests.set(ivk, request);
+
+        this._showOverlay({message: 'A carregar modelo do documento', icon: 'connecting', spinner: true, loading_icon: 'loading-icon-03'});
         this.userActivity();
       }
 
       loadDocument (chapterModel, clientCallback) {
         let ivk = this._selectInvokeId();
         let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-        let request = { callback: clientCallback , timer: tid, invokeId: ivk };
+        let request = { timer: tid, invokeId: ivk, callback: function (response) {
+                                    this._dismissOverlay();
+                                    clientCallback(response);
+                                  }.bind(this) };
         let options = { target: "document", id: chapterModel.id }
         this._send(ivk + ':LOAD:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
         this._activeRequests.set(ivk, request);
+
+        this._showOverlay({message: 'A carregar dados do documento', icon: 'connecting', spinner: true, loading_icon: 'loading-icon-03'});
         this.userActivity();
       }
 
@@ -978,7 +986,9 @@ websocket client for casper server
                   this._freeInvokeId(invokeId);
                   subscribe = false;
                 } else {
-                  console.log(`keeping invoke ${invokeId} alive for channel ${payload.channel}`);
+                  if ( false ) {
+                    console.log(`keeping invoke ${invokeId} alive for channel ${payload.channel}`);
+                  }
                   subscribe = true;
                 }
 
@@ -1122,7 +1132,9 @@ websocket client for casper server
         if ( this._accessValidity !== undefined ) {
 
           let now = new Date().valueOf()/1000;
-          console.log('TTL is ~', this._accessValidity - now );
+          if ( false ) {
+            console.log('TTL is ~', this._accessValidity - now );
+          }
           if ( this._accessValidity - now < this.sessionRenewTolerance ) {
             this.extendSession();
             this._accessValidity = undefined;
