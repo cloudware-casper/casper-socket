@@ -797,6 +797,8 @@ websocket client for casper server
         let request = { callback: callback, timer: tid, invokeId: ivk  };
         this._send(ivk + ':GET:' + JSON.stringify(options));
         this._activeRequests.set(ivk, request);
+
+        return ivk;
       }
 
       /**
