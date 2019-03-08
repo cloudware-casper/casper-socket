@@ -188,6 +188,9 @@ websocket client for casper server
         job['subentity_schema'] = null;
         job['subentity_prefix'] = null;
         job['user_email']       = null;
+        if ( options != undefined && options.ttr ) {
+          job['ttr']             = options.ttr;
+        }
 
         if ( this.extraOptions !== undefined ) {
           this.extraOptions.forEach((elem) => {
