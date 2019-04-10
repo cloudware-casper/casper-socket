@@ -578,14 +578,11 @@ websocket client for casper server
                                   }.bind(this) };
         let options = { target: "document" }
 
-        // TODO Remove me.
-        app.session_data.certified_software_notice = 'Powered by Business';
-
         // Check if there is a software notice stored in session.
         const socketPayload = Object.assign({}, chapterModel);
-        if (app.session_data.hasOwnProperty('certified_software_notice')) {
+        if (app.session_data.app.hasOwnProperty('certified_software_notice')) {
           socketPayload.overridable_system_variables = {
-            CERTIFIED_SOFTWARE_NOTICE: app.session_data.certified_software_notice
+            CERTIFIED_SOFTWARE_NOTICE: app.session_data.app.certified_software_notice
           };
         }
 
