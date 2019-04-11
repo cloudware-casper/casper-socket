@@ -563,7 +563,16 @@ class CasperSocket extends PolymerElement {
                                 clientCallback(response);
                               }.bind(this) };
     let options = { target: "document" }
-    this._send(ivk + ':OPEN:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
+
+    // Check if there is a software notice stored in session.
+    const socketPayload = Object.assign({}, chapterModel);
+    if (app.session_data.app.hasOwnProperty('certified_software_notice')) {
+      socketPayload.overridable_system_variables = {
+        CERTIFIED_SOFTWARE_NOTICE: app.session_data.app.certified_software_notice
+      };
+    }
+
+    this._send(ivk + ':OPEN:' + JSON.stringify(options) + ':' + JSON.stringify(socketPayload));
     this._activeRequests.set(ivk, request);
 
     this._showOverlay({message: 'A carregar modelo do documento', icon: 'connecting', spinner: true, loading_icon: 'loading-icon-03'});
@@ -578,6 +587,7 @@ class CasperSocket extends PolymerElement {
                                 clientCallback(response);
                               }.bind(this) };
     let options = { target: "document", id: chapterModel.id }
+
     this._send(ivk + ':LOAD:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
     this._activeRequests.set(ivk, request);
 
@@ -1336,7 +1346,6 @@ class CasperSocket extends PolymerElement {
   get savedCredential () {
     return window.localStorage.getItem('casper-refresh-token');
   }
-
 }
 
 window.customElements.define(CasperSocket.is, CasperSocket);
