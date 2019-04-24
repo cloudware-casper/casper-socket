@@ -984,7 +984,7 @@ class CasperSocket extends PolymerElement {
               // Unknown message ignore
               console.error('casper protocol decoding error!!!');
             }
-            if ( ! (payload.channel && timerId && ( !payload.status || payload.status.status === 'in-progress' ))) {
+            if ( ! (payload.channel && timerId && ( !payload.status || ['in-progress', 'queued'].includes(payload.status.status) ))) {
               // ... release the invoke ...
               if ( timerId ) {
                 clearTimeout(timerId);
