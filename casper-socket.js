@@ -20,6 +20,23 @@
 
 import { PolymerElement } from '@polymer/polymer/polymer-element.js';
 
+// from https://stackoverflow.com/questions/26150232/resolve-javascript-promise-outside-function-scope
+class CasperSocketPromise
+{
+  constructor () {
+    this._promise = new Promise((resolve, reject) => {
+      // assign the resolve and reject functions to `this`
+      // making them usable on the class instance
+      this.resolve = resolve;
+      this.reject = reject;
+    });
+    // bind `then` and `catch` to implement the same interface as Promise
+    this.then  = this._promise.then.bind(this._promise);
+    this.catch = this._promise.catch.bind(this._promise);
+    this[Symbol.toStringTag] = 'Promise';
+  }
+}
+
 class CasperSocket extends PolymerElement {
 
   static get is () {
@@ -980,6 +997,22 @@ class CasperSocket extends PolymerElement {
               payload = JSON.parse(data.substring(payload_start + 3));
             } else if ((payload_start = data.indexOf(':E:{')) === offset) {
               payload = JSON.parse(data.substring(payload_start + 3));
+            } else if ((payload_start = data.indexOf(':H:')) === offset ) {
+              let response    = data.substring(payload_start + 3);
+              let status_code = parseInt(response);
+              response = response.substring(response.indexOf(':') + 1);
+              if ( response.length ) {
+                payload = JSON.parse(response);
+              }
+              if ( status_code >= 100 && status_code < 299 ) {
+                request.promise.resolve(payload);
+              } else {
+                request.promise.reject(payload !== undefined ? new Error(payload.error) : Error("Unknown error"));
+              }
+              clearTimeout(timerId);
+              this._activeRequests.delete(invokeId);
+              this._freeInvokeId(invokeId);
+              return;
             } else {
               // Unknown message ignore
               console.error('casper protocol decoding error!!!');
@@ -1042,6 +1075,9 @@ class CasperSocket extends PolymerElement {
           status: 'error',
           status_code: 504
         });
+      }
+      if ( request.promise !== undefined ) {
+        request.promise.reject(new Error('HTTP bridge Timeout'));
       }
       this._activeRequests.delete(invokeId);
       this._freeInvokeId(invokeId);
@@ -1345,6 +1381,60 @@ class CasperSocket extends PolymerElement {
    */
   get savedCredential () {
     return window.localStorage.getItem('casper-refresh-token');
+  }
+
+  //***************************************************************************************//
+  //                                                                                       //
+  //            ~~~ Access to upstream restfull microservices via websocket ~~~            //
+  //                                                                                       //
+  //***************************************************************************************//
+
+  hget (url, timeout) {
+    return this._http_upstream('GET', url, undefined, timeout);
+  }
+
+  hput (url, body, timeout) {
+    return this._http_upstream('PUT', url, body, timeout);
+  }
+
+  hpost (url, body, timeout) {
+    return this._http_upstream('POST', url, body, timeout);
+  }
+
+  hdelete (url, body, timeout) {
+    return this._http_upstream('DELETE', url, body, timeout);
+  }
+
+  hpatch (url, body, timeout) {
+    return this._http_upstream('PATCH', url, body, timeout);
+  }
+
+  _http_upstream (verb, url, body, timeout) {
+    let ivk     = this._selectInvokeId();
+    let tid     = setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000);
+    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    let request = { promise: promise, timer: tid, invokeId: ivk };
+    this._send(`${ivk}:${verb}:${JSON.stringify({ target: 'http', url: url, headers: { 'content-type': 'application/json', 'accept': 'application/json' }})}${(body !== undefined ? ':' + JSON.stringify(body) : '')}`);
+    this._activeRequests.set(ivk, request);
+    return promise;
+  }
+
+  async test (url) {
+    url = url || 'http://toconline.io:3200/cdb/vault/accountant/VIACTTIV';
+
+    try {
+      let value = await this.hget(url, 0.2);
+      let ok = await window.app.showAlert({
+                                            overrideWizardDimensions: {
+                                             width: '500px',
+                                             height: '250px',
+                                           },
+                                           message: JSON.stringify(value)
+                                         });
+      console.log(`user said ${ok}`);
+    } catch (err) {
+      console.log(err);
+    }
   }
 }
 
