@@ -1418,24 +1418,6 @@ class CasperSocket extends PolymerElement {
     this._activeRequests.set(ivk, request);
     return promise;
   }
-
-  async test (url) {
-    url = url || 'http://toconline.io:3200/cdb/vault/accountant/VIACTTIV';
-
-    try {
-      let value = await this.hget(url, 0.2);
-      let ok = await window.app.showAlert({
-                                            overrideWizardDimensions: {
-                                             width: '500px',
-                                             height: '250px',
-                                           },
-                                           message: JSON.stringify(value)
-                                         });
-      console.log(`user said ${ok}`);
-    } catch (err) {
-      console.log(err);
-    }
-  }
 }
 
 window.customElements.define(CasperSocket.is, CasperSocket);
