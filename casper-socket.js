@@ -681,7 +681,7 @@ class CasperSocket extends PolymerElement {
   setTextT (id, value, motion, final, callback) {
     let ivk = this._selectInvokeId();
     let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { callback: callback, timer: tid, invokeId: ivk };
+    let request = { callback: callback, timer: tid, invokeId: ivk, hideTimeout: true  };
     let options = { target: "document", id: id };
     let command = { input: { text: value, final_update: final }};
     if ( motion ) {
@@ -997,6 +997,13 @@ class CasperSocket extends PolymerElement {
               payload = JSON.parse(data.substring(payload_start + 3));
             } else if ((payload_start = data.indexOf(':E:{')) === offset) {
               payload = JSON.parse(data.substring(payload_start + 3));
+              if ( request.promise !== undefined ) {
+                request.promise.reject(new Error("Unknown error"));
+                clearTimeout(timerId);
+                this._activeRequests.delete(invokeId);
+                this._freeInvokeId(invokeId);
+                return;
+              }
             } else if ((payload_start = data.indexOf(':H:')) === offset ) {
               let response    = data.substring(payload_start + 3);
               let status_code = parseInt(response);
@@ -1007,7 +1014,7 @@ class CasperSocket extends PolymerElement {
               if ( status_code >= 100 && status_code < 299 ) {
                 request.promise.resolve(payload);
               } else {
-                request.promise.reject(payload !== undefined ? new Error(payload.error) : Error("Unknown error"));
+                request.promise.reject(payload !== undefined ? new Error(payload.error) : new Error("Bridge error"));
               }
               clearTimeout(timerId);
               this._activeRequests.delete(invokeId);
@@ -1081,6 +1088,9 @@ class CasperSocket extends PolymerElement {
       }
       this._activeRequests.delete(invokeId);
       this._freeInvokeId(invokeId);
+      if ( request.hideTimeout === true ) {
+        handled = true;
+      }
     }
     if ( ! handled ) {
       this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
