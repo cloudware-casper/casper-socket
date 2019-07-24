@@ -465,13 +465,20 @@ class CasperSocket extends PolymerElement {
 
   switchToEntity (entityId, redirectUrl, subEntityId, subEntityType) {
     this.submitJob({
-        tube:               this._switchEntityQueue,
-        access_token:       null,             // will be set by server from session data
-        refresh_token:      null,             // will be set by server from session data
-        to_entity_id:       entityId,         // id of the entity we'll switch to
-        to_subentity_id:    subEntityId,      // id of the sub-entity we'll switch to
-        to_subtype:         subEntityType,    // type of the sub-entity we'll switch to
-        url:                redirectUrl       // URL to load after the switch is made
+        tube                   : this._switchEntityQueue,
+        access_token           : null,                      // will be set by server from session data
+        refresh_token          : null,                      // will be set by server from session data
+        impersonator_email     : null,
+        impersonator_role_mask : null,
+        impersonator_id        : null,
+        impersonator_entity_id : null,
+        role_mask              : null,
+        entity_id              : null,
+        user_id                : null,
+        to_entity_id           : entityId,                  // id of the entity we'll switch to
+        to_subentity_id        : subEntityId,               // id of the sub-entity we'll switch to
+        to_subtype             : subEntityType,             // type of the sub-entity we'll switch to
+        url                    : redirectUrl                // URL to load after the switch is made
       },
       this._switchEntityListener.bind(this), {
         ttr: Math.max(this.defaultTimeout - 5, 5),
