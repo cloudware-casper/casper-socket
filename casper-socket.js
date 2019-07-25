@@ -1005,7 +1005,7 @@ class CasperSocket extends PolymerElement {
             } else if ((payload_start = data.indexOf(':E:{')) === offset) {
               payload = JSON.parse(data.substring(payload_start + 3));
               if ( request.promise !== undefined ) {
-                request.promise.reject(new Error("Unknown error"));
+                request.promise.reject({error: "Unknown error", status_code: 500});
                 clearTimeout(timerId);
                 this._activeRequests.delete(invokeId);
                 this._freeInvokeId(invokeId);
@@ -1021,7 +1021,7 @@ class CasperSocket extends PolymerElement {
               if ( status_code >= 100 && status_code < 299 ) {
                 request.promise.resolve(payload);
               } else {
-                request.promise.reject(payload !== undefined ? new Error(payload.error) : new Error("Bridge error"));
+                request.promise.reject({error: (payload !== undefined ? payload.error : 'Bridge error'), status_code: status_code});
               }
               clearTimeout(timerId);
               this._activeRequests.delete(invokeId);
@@ -1091,7 +1091,7 @@ class CasperSocket extends PolymerElement {
         });
       }
       if ( request.promise !== undefined ) {
-        request.promise.reject(new Error('HTTP bridge Timeout'));
+        request.promise.reject({error: 'HTTP bridge Timeout', status_code: 504});
       }
       this._activeRequests.delete(invokeId);
       this._freeInvokeId(invokeId);
