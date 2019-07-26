@@ -716,6 +716,7 @@ class CasperSocket extends PolymerElement {
     const tid     = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
     const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
     this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk });
+
     if ( isUserActivity ) {
       this.userActivity();
     }
