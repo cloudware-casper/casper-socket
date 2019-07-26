@@ -126,7 +126,7 @@ class CasperSocket extends PolymerElement {
 
     // ... install global listeners to detect user activity
     document.addEventListener('mouseout', this._boundMouseOutListener);
-    //document.addEventListener('click',    this._boundUserActivity);
+    //document.addEventListener('click',    this._boundUserActivity);  TODO why is this commented???
     document.addEventListener('keypress', this._boundUserActivity);
     window.addEventListener('blur',       this._boundApplicationInactive);
   }
@@ -143,7 +143,7 @@ class CasperSocket extends PolymerElement {
 
     // ... cleanup global listeners
     document.removeEventListener('mouseout', this._boundMouseOutListener);
-    //document.removeEventListener('click',    this._boundUserActivity);
+    //document.removeEventListener('click',    this._boundUserActivity);  TODO why is this commented???
     document.removeEventListener('keypress', this._boundUserActivity);
     window.removeEventListener('blur',       this._boundApplicationInactive);
   }
@@ -569,7 +569,7 @@ class CasperSocket extends PolymerElement {
 
   //***************************************************************************************//
   //                                                                                       //
-  //                               ~~~ Documents ~~~                                       //
+  //                               ~~~ EPaper Documents ~~~                                //
   //                                                                                       //
   //***************************************************************************************//
 
@@ -580,191 +580,119 @@ class CasperSocket extends PolymerElement {
   /**
    * Open document template
    */
-  openDocument (chapterModel, documentHandler) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
-    let request = { promise: promise, timer: tid, invokeId: ivk };
-    let options = { target: "document" }
-
-    // Check if there is a software notice stored in session.
-    const socketPayload = Object.assign({}, chapterModel);
-    if ( app.session_data.app.hasOwnProperty('certified_software_notice') ) {
-      socketPayload.overridable_system_variables = {
+  openDocument (chapterModel) {
+    // TODO REMOVE FROM HERE WHEN PAPER IS UNIFIED
+    if ( app.session_data.app.certified_software_notice !== undefined ) {
+      chapterModel.overridable_system_variables = {
         CERTIFIED_SOFTWARE_NOTICE: app.session_data.app.certified_software_notice
       };
     }
-
-    this._send(ivk + ':OPEN:' + JSON.stringify(options) + ':' + JSON.stringify(socketPayload));
-    this._activeRequests.set(ivk, request);
-
-    this.userActivity();
-    return promise;
+    return this._sendAsync(true, 'OPEN', { target: 'document' }, chapterModel);
   }
 
   loadDocument (chapterModel) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
-    let request = { promise: promise, timer: tid, invokeId: ivk };
-    let options = { target: "document", id: chapterModel.id }
-
-    this._send(ivk + ':LOAD:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
-    this._activeRequests.set(ivk, request);
-
-    this.userActivity();
-    return promise;
+    return this._sendAsync(true, 'LOAD', { target: 'document', id: chapterModel.id }, chapterModel);
   }
 
   reloadDocument (id) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
-    let request = { promise: promise, callback: callback, timer: tid, invokeId: ivk };
-    let options = { target: "document", id: id }
-    this._send(ivk + ':RELOAD:' + JSON.stringify(options));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
-    return promise;
+    return this._sendAsync(true, 'RELOAD', { target: 'document', id: id });
   }
 
   closeDocument (id, reload) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
-    let request = { promise: promise, timer: tid, invokeId: ivk };
     let options;
     if ( undefined != id ) {
-      options = { target: "document", id: id }
+      options = { target: 'document', id: id }
     } else {
-      options = { target: "document" }
+      options = { target: 'document' }
     }
     if ( reload !== undefined && reload === false ) {
       options.reload = false;
     }
-    this._send(ivk + ':CLOSE:' + JSON.stringify(options));
-    this._activeRequests.set(ivk, request);
-    return promise;
+    return this._sendAsync(true, 'CLOSE', options);
   }
 
-  sendKey (id, key, modifier, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    let options = { target: "document", id: id };
-    let command = { input: { key: key }};
+  sendKey (id, key, modifier) {
+    const params = { input: { key: key }};
     if ( modifier ) {
-      command.input.modifier = modifier;
+      params.input.modifier = modifier;
     }
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, params);
   }
 
-  moveCursor (id, motion, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    let options = { target: "document", id: id };
-    let command = { input: { motion: motion }};
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
+  moveCursor (id, motion) {
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, { input: { motion: motion }});
   }
 
-  setText (id, value, motion, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    let options = { target: "document", id: id };
-    let command = { input: { text: value }};
+  setText (id, value, motion) {
+    const params = { input: { text: value }};
     if ( motion ) {
-      command.input.motion = motion;
+      params.input.motion = motion;
     }
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, params);
   }
 
-  setTextT (id, value, motion, final, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { callback: callback, timer: tid, invokeId: ivk, hideTimeout: true  };
-    let options = { target: "document", id: id };
-    let command = { input: { text: value, final_update: final }};
+  setTextT (id, value, motion, final) {
+    const params = { input: { text: value, final_update: final }};
     if ( motion ) {
-      command.input.motion = motion;
+      params.input.motion = motion;
     }
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, params);
   }
 
   sendClick (id, x, y, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let options = { target: "document", id: id };
-    let command = { input: { click: { x: x, y: y }}};
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, { input: { click: { x: x, y: y }}});
   }
 
-  _sendAsync (isUserActivity, verb, options, command) {
-    const ivk     = this._selectInvokeId();
-    const tid     = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
-    this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk });
-
-    if ( isUserActivity ) {
-      this.userActivity();
-    }
-    this._send(`${ivk}:${verb}:${JSON.stringify(options)}:${JSON.stringify(command)}`);
-    return promise;
+  gotoPage (id, pageNumber) {
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, { properties: { page: pageNumber }});
   }
 
-  async gotoPage (id, pageNumber) {
-    return this._sendAsync(true, 'SET', { target: "document", id: id }, { properties: { page: pageNumber }});
+  setScale (id, scale) {
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, { properties: { scale: scale }});
   }
 
-  setScale (id, scale, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let options = { target: "document", id: id };
-    let command = { properties: { scale: scale }};
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
+  setEditable (id, editable) {
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, { properties: { editable: editable }});
   }
 
-  setEditable (id, editable, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let options = { target: "document", id: id };
-    let command = { properties: { editable: editable }};
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
+  /**
+   * Requests the server side hint for the current hovering point
+   *
+   * @param {number} id document identifier
+   * @param {number} x coordinate where the mouse is overing
+   * @param {number} y coordinate where the mouse is overing
+   */
+  getHint (id, x, y) {
+    return this._sendAsync(false /* TODO CHECK*/, 'GET', { target: 'document', id: id }, { hint: { x: 1.0 * x.toFixed(2), y: 1.0 * y.toFixed(2) }});
+  }
+
+  addBand (id, type, bandId) {
+    return this._sendAsync(true, 'ADD', { target: 'document', id: id }, { band: { type: type, id: bandId}});
+  }
+
+  deleteBand (id, type, bandId, callback) {
+    return this._sendAsync(true, 'REMOVE', { target: 'document', id: id }, { band: { type: type, id: bandId}});
   }
 
   setListValue (id, value, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let options = { target: "document", id: id };
-    let command = { input: { text: value, key: 'save' }};
-    let request = { callback: callback, timer: tid, invokeId: ivk };
+    const ivk = this._selectInvokeId();
+    const tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+    const options = { target: "document", id: id };
+    const command = { input: { text: value, key: 'save' }};
+    const request = { callback: callback, timer: tid, invokeId: ivk };
     this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
     this._activeRequests.set(ivk, request);
     this.userActivity();
   }
 
+  /*** NOTFICATION STUFF **/
+
   getNotifications (channel, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { invokeId: ivk, timer: tid, callback: function (response) {
+    const ivk = this._selectInvokeId();
+    const tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+    const request = { invokeId: ivk, timer: tid, callback: function (response) {
            try {
-             let notifications = [];
+             const notifications = [];
              for ( var m of response.members ) {
                notifications.push(JSON.parse(m));
              }
@@ -774,16 +702,16 @@ class CasperSocket extends PolymerElement {
            }
          }.bind(this)
       };
-    let options = { target: 'notifications', channel: channel };
+    const options = { target: 'notifications', channel: channel };
     this._send(ivk + ':GET:' + JSON.stringify(options));
     this._activeRequests.set(ivk, request);
   }
 
   subscribeNotifications (channel, id, handler) {
-    let ivk = this._selectInvokeId();
-    let chn = channel + ':' + id;
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { callback: this._subscribeNotificationsResponse.bind(this), channel: chn, handler: handler, timer: tid, invokeId: ivk };
+    const ivk = this._selectInvokeId();
+    const chn = channel + ':' + id;
+    const tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+    const request = { callback: this._subscribeNotificationsResponse.bind(this), channel: chn, handler: handler, timer: tid, invokeId: ivk };
     this._send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id }));
     this._activeRequests.set(ivk, request);
     this._subscriptions.set(channel + ':' + id, { handler: handler, timer: tid, invokeId: ivk, confirmed: false, notification: true});
@@ -831,51 +759,48 @@ class CasperSocket extends PolymerElement {
     return ivk;
   }
 
-  /**
-   * Requests the server side hint for the current hovering point
-   *
-   * @param {number} id document identifier
-   * @param {number} x coordinate where the mouse is overing
-   * @param {number} y coordinate where the mouse is overing
-   * @param {function} bound response handler to callback
-   */
-  getHint (id, x, y, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let options = { target: "document", id: id };
-    let command = { hint: { x: 1.0 * x.toFixed(2), y: 1.0 * y.toFixed(2) }};
-    let request = { callback: callback, timer: tid, invokeId: ivk  };
-    this._send(ivk + ':GET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
-  }
-
-  addBand (id, type, bandId, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let options = { target: "document", id: id };
-    let command = { band: { type: type, id: bandId}};
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':ADD:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-  }
-
-  deleteBand (id, type, bandId, callback) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let options = { target: "document", id: id };
-    let command = { band: { type: type, id: bandId}};
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':REMOVE:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
-  }
-
   //***************************************************************************************//
   //                                                                                       //
   //                               ~~~ Internal methods ~~~                                //
   //                                                                                       //
   //***************************************************************************************//
+
+  /**
+   * Send command to the HTTP micro service brige with a promise for aysnc / await use
+   *
+   * @param {String} verb the HTTP verb to use (GET, PUT, POST, PATCH, DELETE)
+   * @param {String} url the target URL
+   * @param {Object} body optional body object
+   * @param {Number} timeout in seconds
+   */
+  _http_upstream (verb, url, body, timeout) {
+    return this._sendAsync(false, verb, { target: 'http', url: url, headers: { 'content-type': 'application/json', 'accept': 'application/json' }}, body, timeout);
+  }
+
+  /**
+   * Send command to the server with a promise for aysnc / await use
+   *
+   * @param {Boolean} isUserActivity true to trigger user activity
+   * @param {String} verb the command verb to use
+   * @param {Object} options the command options
+   * @param {Object} params the command parameters
+   * @param {Number} timeout in seconds
+   */
+  _sendAsync (isUserActivity, verb, options, params, timeout) {
+    const ivk     = this._selectInvokeId();
+    const tid     = setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000);
+    const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk });
+    if ( isUserActivity ) {
+      this.userActivity();
+    }
+    if ( params !== undefined ) {
+      this._send(`${ivk}:${verb}:${JSON.stringify(options)}:${JSON.stringify(params)}`);
+    } else {
+      this._send(`${ivk}:${verb}:${JSON.stringify(options)}`);
+    }
+    return promise;
+  }
 
   /**
    * Send text message to casper server
@@ -1447,15 +1372,6 @@ class CasperSocket extends PolymerElement {
     return this._http_upstream('PATCH', url, body, timeout);
   }
 
-  _http_upstream (verb, url, body, timeout) {
-    let ivk     = this._selectInvokeId();
-    let tid     = setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000);
-    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
-    let request = { promise: promise, timer: tid, invokeId: ivk };
-    this._send(`${ivk}:${verb}:${JSON.stringify({ target: 'http', url: url, headers: { 'content-type': 'application/json', 'accept': 'application/json' }})}${(body !== undefined ? ':' + JSON.stringify(body) : '')}`);
-    this._activeRequests.set(ivk, request);
-    return promise;
-  }
 }
 
 window.customElements.define(CasperSocket.is, CasperSocket);
