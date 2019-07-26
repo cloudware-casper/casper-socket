@@ -573,24 +573,23 @@ class CasperSocket extends PolymerElement {
   //                                                                                       //
   //***************************************************************************************//
 
+  registerDocumentHandler (docmentId, documentHandler) {
+    this._documents.set(docmentId, documentHandler);
+  }
+
   /**
    * Open document template
    */
-  openDocument (chapterModel, clientCallback, documentHandler) {
+  openDocument (chapterModel, documentHandler) {
     let ivk = this._selectInvokeId();
     let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { timer: tid, invokeId: ivk, callback: function (response) {
-                                if ( undefined != response.id ) {
-                                  this._documents.set(response.id, documentHandler);
-                                }
-                                this._dismissOverlay();
-                                clientCallback(response);
-                              }.bind(this) };
+    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    let request = { promise: promise, timer: tid, invokeId: ivk };
     let options = { target: "document" }
 
     // Check if there is a software notice stored in session.
     const socketPayload = Object.assign({}, chapterModel);
-    if (app.session_data.app.hasOwnProperty('certified_software_notice')) {
+    if ( app.session_data.app.hasOwnProperty('certified_software_notice') ) {
       socketPayload.overridable_system_variables = {
         CERTIFIED_SOFTWARE_NOTICE: app.session_data.app.certified_software_notice
       };
@@ -599,40 +598,41 @@ class CasperSocket extends PolymerElement {
     this._send(ivk + ':OPEN:' + JSON.stringify(options) + ':' + JSON.stringify(socketPayload));
     this._activeRequests.set(ivk, request);
 
-    this._showOverlay({message: 'A carregar modelo do documento', icon: 'connecting', spinner: true, loading_icon: 'loading-icon-03'});
     this.userActivity();
+    return promise;
   }
 
-  loadDocument (chapterModel, clientCallback) {
+  loadDocument (chapterModel) {
     let ivk = this._selectInvokeId();
     let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { timer: tid, invokeId: ivk, callback: function (response) {
-                                this._dismissOverlay();
-                                clientCallback(response);
-                              }.bind(this) };
+    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    let request = { promise: promise, timer: tid, invokeId: ivk };
     let options = { target: "document", id: chapterModel.id }
 
     this._send(ivk + ':LOAD:' + JSON.stringify(options) + ':' + JSON.stringify(chapterModel));
     this._activeRequests.set(ivk, request);
 
-    this._showOverlay({message: 'A carregar dados do documento', icon: 'connecting', spinner: true, loading_icon: 'loading-icon-03'});
     this.userActivity();
+    return promise;
   }
 
-  reloadDocument (id, callback) {
+  reloadDocument (id) {
     let ivk = this._selectInvokeId();
     let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { callback: callback, timer: tid, invokeId: ivk };
+    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    let request = { promise: promise, callback: callback, timer: tid, invokeId: ivk };
     let options = { target: "document", id: id }
     this._send(ivk + ':RELOAD:' + JSON.stringify(options));
     this._activeRequests.set(ivk, request);
     this.userActivity();
+    return promise;
   }
 
-  closeDocument (id, reload, callback) {
+  closeDocument (id, reload) {
     let ivk = this._selectInvokeId();
     let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { callback: callback, timer: tid, invokeId: ivk };
+    let promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    let request = { promise: promise, timer: tid, invokeId: ivk };
     let options;
     if ( undefined != id ) {
       options = { target: "document", id: id }
@@ -644,6 +644,7 @@ class CasperSocket extends PolymerElement {
     }
     this._send(ivk + ':CLOSE:' + JSON.stringify(options));
     this._activeRequests.set(ivk, request);
+    return promise;
   }
 
   sendKey (id, key, modifier, callback) {
@@ -710,15 +711,20 @@ class CasperSocket extends PolymerElement {
     this.userActivity();
   }
 
-  gotoPage (id, pageNumber, focus, callback) {  // focus???
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let options = { target: "document", id: id };
-    let command = { properties: { page: pageNumber }};
-    let request = { callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
-    this._activeRequests.set(ivk, request);
-    this.userActivity();
+  _sendAsync (isUserActivity, verb, options, command) {
+    const ivk     = this._selectInvokeId();
+    const tid     = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+    const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk });
+    if ( isUserActivity ) {
+      this.userActivity();
+    }
+    this._send(`${ivk}:${verb}:${JSON.stringify(options)}:${JSON.stringify(command)}`);
+    return promise;
+  }
+
+  async gotoPage (id, pageNumber) {
+    return this._sendAsync(true, 'SET', { target: "document", id: id }, { properties: { page: pageNumber }});
   }
 
   setScale (id, scale, callback) {
@@ -1000,8 +1006,22 @@ class CasperSocket extends PolymerElement {
             timerId = request.timer;
             if ( (payload_start = data.indexOf(':R:{')) === offset ) {
               payload = JSON.parse(data.substring(payload_start + 3));
+              if ( request.promise ) {
+                clearTimeout(timerId);
+                this._activeRequests.delete(invokeId);
+                this._freeInvokeId(invokeId);
+                request.promise.resolve(payload);
+                return;
+              }
             } else if ((payload_start = data.indexOf(':S:{')) === offset) {
               payload = JSON.parse(data.substring(payload_start + 3));
+              if ( request.promise ) {
+                clearTimeout(timerId);
+                this._activeRequests.delete(invokeId);
+                this._freeInvokeId(invokeId);
+                request.promise.resolve(payload);
+                return;
+              }
             } else if ((payload_start = data.indexOf(':E:{')) === offset) {
               payload = JSON.parse(data.substring(payload_start + 3));
               if ( request.promise !== undefined ) {
