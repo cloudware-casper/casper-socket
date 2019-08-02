@@ -20,7 +20,12 @@
 
 import { PolymerElement } from '@polymer/polymer/polymer-element.js';
 
-// from https://stackoverflow.com/questions/26150232/resolve-javascript-promise-outside-function-scope
+/**
+ * This promise wrapper can be resolved outside the caller scope, i.e. we can resolve from the
+ * network code that decodes incoming messages
+ *
+ * from https://stackoverflow.com/questions/26150232/resolve-javascript-promise-outside-function-scope
+ */
 class CasperSocketPromise
 {
   constructor () {
@@ -790,7 +795,7 @@ class CasperSocket extends PolymerElement {
     const ivk     = this._selectInvokeId();
     const tid     = setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000);
     const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
-    this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk });
+    this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk, jsonapi: options.jsonapi });
     if ( isUserActivity ) {
       this.userActivity();
     }
@@ -930,22 +935,29 @@ class CasperSocket extends PolymerElement {
             let payload_start, subscribe;
 
             timerId = request.timer;
-            if ( (payload_start = data.indexOf(':R:{')) === offset ) {
+            if (    (payload_start = data.indexOf(':R:{')) === offset
+                 || (payload_start = data.indexOf(':S:{')) === offset ) {
               payload = JSON.parse(data.substring(payload_start + 3));
-              if ( request.promise ) {
-                clearTimeout(timerId);
-                this._activeRequests.delete(invokeId);
-                this._freeInvokeId(invokeId);
-                request.promise.resolve(payload);
-                return;
+              if ( request.jsonapi === true ) {
+                if ( payload.errors === undefined ) {
+                  if ( payload.data instanceof Array ) {
+                    payload.data.forEach((element, index, array) => { element.attributes.id = element.id; array[index] = element.attributes; });
+                    payload = payload.data;
+                  } else {
+                    payload.data.attributes.id = payload.data.id;
+                    payload = payload.data.attributes;
+                  }
+                }
               }
-            } else if ((payload_start = data.indexOf(':S:{')) === offset) {
-              payload = JSON.parse(data.substring(payload_start + 3));
               if ( request.promise ) {
                 clearTimeout(timerId);
                 this._activeRequests.delete(invokeId);
                 this._freeInvokeId(invokeId);
-                request.promise.resolve(payload);
+                if ( request.jsonapi === true && payload.errors !== undefined ) {
+                  request.promise.reject(payload.errors);
+                } else {
+                  request.promise.resolve(payload);
+                }
                 return;
               }
             } else if ((payload_start = data.indexOf(':E:{')) === offset) {
@@ -1138,7 +1150,7 @@ class CasperSocket extends PolymerElement {
     if ( this._accessValidity !== undefined ) {
 
       let now = new Date().valueOf()/1000;
-      if ( false ) {
+      if ( true ) {
         console.log('TTL is ~', this._accessValidity - now );
       }
       if ( this._accessValidity - now < this.sessionRenewTolerance ) {
@@ -1372,6 +1384,9 @@ class CasperSocket extends PolymerElement {
     return this._http_upstream('PATCH', url, body, timeout);
   }
 
+  jget (urn, timeout) {
+    return this._sendAsync(false, 'GET', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
+  }
 }
 
 window.customElements.define(CasperSocket.is, CasperSocket);
