@@ -942,10 +942,9 @@ class CasperSocket extends PolymerElement {
                 if ( payload.errors === undefined ) {
                   if ( payload.data instanceof Array ) {
                     payload.data.forEach((element, index, array) => { element.attributes.id = element.id; array[index] = element.attributes; });
-                    payload = payload.data;
                   } else {
                     payload.data.attributes.id = payload.data.id;
-                    payload = payload.data.attributes;
+                    payload.data = payload.data.attributes;
                   }
                 }
               }
