@@ -196,6 +196,8 @@ class CasperSocket extends PolymerElement {
     job['subentity_schema'] = null;
     job['subentity_prefix'] = null;
     job['user_email']       = null;
+    job['role_mask']        = null;
+    job['module_mask']      = null;
     if ( options != undefined && options.ttr ) {
       job['ttr']             = options.ttr;
     }
