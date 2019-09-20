@@ -643,7 +643,7 @@ class CasperSocket extends PolymerElement {
     if ( motion ) {
       params.input.motion = motion;
     }
-    return this._sendAsync(true, 'SET', { target: 'document', id: id }, params);
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, params, -1);
   }
 
   sendClick (id, x, y, callback) {
@@ -773,7 +773,7 @@ class CasperSocket extends PolymerElement {
   //***************************************************************************************//
 
   /**
-   * Send command to the HTTP micro service brige with a promise for aysnc / await use
+   * Send command to the HTTP micro service brige with a promise for async / await use
    *
    * @param {String} verb the HTTP verb to use (GET, PUT, POST, PATCH, DELETE)
    * @param {String} url the target URL
@@ -791,11 +791,11 @@ class CasperSocket extends PolymerElement {
    * @param {String} verb the command verb to use
    * @param {Object} options the command options
    * @param {Object} params the command parameters
-   * @param {Number} timeout in seconds
+   * @param {Number} timeout in seconds (use -1 to disable)
    */
   _sendAsync (isUserActivity, verb, options, params, timeout) {
     const ivk     = this._selectInvokeId();
-    const tid     = setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000);
+    const tid     = timeout ==  -1 ? undefined : (setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000));
     const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
     this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk, jsonapi: options.jsonapi });
     if ( isUserActivity ) {
