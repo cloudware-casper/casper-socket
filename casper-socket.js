@@ -352,6 +352,68 @@ class CasperSocket extends PolymerElement {
     window.location = '/login';
   }
 
+  async _disconnectAsync () {
+    const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    const tid = setTimeout(() => {
+      promise.reject('disconnect timeout');
+    }, 3000);
+    this._socket.onclose = () => { promise.resolve(true); clearTimeout(tid); this._socket = undefined; };
+    this._socket.close();
+    return promise;
+  }
+
+  async _setSessionAsync (accessToken) {
+    return this._sendAsync(false, 'SET', { target: 'session' }, { access_token: accessToken });
+  }
+
+  async _switchToEntityAsync (entityId, redirectUrl, subEntityId, subEntityType) {
+    const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    this.submitJob({
+        tube: this._switchEntityQueue,
+        access_token: null,             // will be set by server from session data
+        refresh_token: null,            // will be set by server from session data
+        impersonator_email: null,
+        impersonator_role_mask: null,
+        impersonator_id: null,
+        impersonator_entity_id: null,
+        role_mask: null,
+        entity_id: null,
+        user_id: null,
+        to_entity_id: entityId,         // id of the entity we'll switch to
+        to_subentity_id: subEntityId,   // id of the sub-entity we'll switch to
+        to_subtype: subEntityType,      // type of the sub-entity we'll switch to
+        url: redirectUrl                // URL to load after the switch is made
+      },
+      (notification) => {
+        promise.resolve(notification); // TODO REJECT on error
+      },
+      {
+        ttr: Math.max(this.defaultTimeout - 5, 5),
+        validity: this.defaultTimeout,
+        timeout: this.defaultTimeout
+      }
+    );
+    return promise;
+  }
+
+  /*____switchEntityListener(notification) {
+    if (notification.status === 'completed' && notification.status_code === 200) {
+      if (notification.response.url[0] === '/') {
+        // ... we are on the same cluster ...
+        this._switchResponse = notification.response;
+        this._setSession(notification.response.access_token, this._validateSwitchSessionResponse.bind(this));
+      } else {
+        // ... we moved to another cluster ...
+        this.saveSessionCookie(notification.response.access_token, notification.response.access_ttl, notification.response.issuer_url);
+        if (notification.response.url !== undefined) {
+          window.location = notification.response.url;
+        }
+      }
+    } else {
+      this._showOverlay({ message: 'Falha na mudança de empresa', icon: 'error' });
+    }
+  }*/
+
   /**
    * Validate the current access token, retrieve access token (session) from cookie and set on websocket
    */
