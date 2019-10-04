@@ -1010,6 +1010,8 @@ class CasperSocket extends PolymerElement {
                     payload.data.attributes.id = payload.data.id;
                     payload.data = payload.data.attributes;
                   }
+                } else {
+                  request.promise.reject(payload.errors);
                 }
               }
               if ( request.promise ) {
