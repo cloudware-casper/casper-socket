@@ -396,24 +396,6 @@ class CasperSocket extends PolymerElement {
     return promise;
   }
 
-  /*____switchEntityListener(notification) {
-    if (notification.status === 'completed' && notification.status_code === 200) {
-      if (notification.response.url[0] === '/') {
-        // ... we are on the same cluster ...
-        this._switchResponse = notification.response;
-        this._setSession(notification.response.access_token, this._validateSwitchSessionResponse.bind(this));
-      } else {
-        // ... we moved to another cluster ...
-        this.saveSessionCookie(notification.response.access_token, notification.response.access_ttl, notification.response.issuer_url);
-        if (notification.response.url !== undefined) {
-          window.location = notification.response.url;
-        }
-      }
-    } else {
-      this._showOverlay({ message: 'Falha na mudança de empresa', icon: 'error' });
-    }
-  }*/
-
   /**
    * Validate the current access token, retrieve access token (session) from cookie and set on websocket
    */
@@ -576,7 +558,11 @@ class CasperSocket extends PolymerElement {
         }
       }
     } else {
-      this._showOverlay({message: 'Falha na mudança de empresa', icon: 'error' });
+      if ( notification.status_code === 406 ) {
+        this._showOverlay({ message: notification.message[0], icon: 'error' });
+      } else {
+        this._showOverlay({message: 'Falha na mudança de empresa', icon: 'error' });
+      }
     }
   }
 
