@@ -739,7 +739,7 @@ class CasperSocket extends PolymerElement {
     return this._sendAsync(true, 'ADD', { target: 'document', id: id }, { band: { type: type, id: bandId}});
   }
 
-  deleteBand (id, type, bandId, callback) {
+  deleteBand (id, type, bandId) {
     return this._sendAsync(true, 'REMOVE', { target: 'document', id: id }, { band: { type: type, id: bandId}});
   }
 
