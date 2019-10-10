@@ -1452,6 +1452,18 @@ class CasperSocket extends PolymerElement {
   jget (urn, timeout) {
     return this._sendAsync(false, 'GET', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
   }
+
+  jpost (urn, body, timeout) {
+    return this._sendAsync(false, 'POST', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
+  }
+
+  jpatch (urn, body, timeout) {
+    return this._sendAsync(false, 'PATCH', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
+  }
+
+  jdelete (urn, timeout) {
+    return this._sendAsync(false, 'DELETE', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
+  }
 }
 
 window.customElements.define(CasperSocket.is, CasperSocket);
