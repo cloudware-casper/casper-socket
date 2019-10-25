@@ -508,14 +508,26 @@ class CasperSocket extends PolymerElement {
     }
   }
 
+
+  //***************************************************************************************//
+  //                                                                                       //
+  //                              ~~~ Entity Logout ~~~                                 //
+  //                                                                                       //
+  //***************************************************************************************//
+
+  logOutFromEntity (url) {
+    this.switchToEntity(null, url, null, null, true);
+  }
+
   //***************************************************************************************//
   //                                                                                       //
   //                              ~~~ Entity switching ~~~                                 //
   //                                                                                       //
   //***************************************************************************************//
 
-  switchToEntity (entityId, redirectUrl, subEntityId, subEntityType) {
+  switchToEntity (entityId, redirectUrl, subEntityId, subEntityType, leave_demo) {
     this.submitJob({
+        leave_demo             : leave_demo,
         tube                   : this._switchEntityQueue,
         access_token           : null,                      // will be set by server from session data
         refresh_token          : null,                      // will be set by server from session data
