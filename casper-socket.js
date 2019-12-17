@@ -352,6 +352,50 @@ class CasperSocket extends PolymerElement {
     window.location = '/login';
   }
 
+  async _disconnectAsync () {
+    const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    const tid = setTimeout(() => {
+      promise.reject('disconnect timeout');
+    }, 3000);
+    this._socket.onclose = () => { promise.resolve(true); clearTimeout(tid); this._socket = undefined; };
+    this._socket.close();
+    return promise;
+  }
+
+  async _setSessionAsync (accessToken) {
+    return this._sendAsync(false, 'SET', { target: 'session' }, { access_token: accessToken });
+  }
+
+  async _switchToEntityAsync (entityId, redirectUrl, subEntityId, subEntityType) {
+    const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    this.submitJob({
+        tube: this._switchEntityQueue,
+        access_token: null,             // will be set by server from session data
+        refresh_token: null,            // will be set by server from session data
+        impersonator_email: null,
+        impersonator_role_mask: null,
+        impersonator_id: null,
+        impersonator_entity_id: null,
+        role_mask: null,
+        entity_id: null,
+        user_id: null,
+        to_entity_id: entityId,         // id of the entity we'll switch to
+        to_subentity_id: subEntityId,   // id of the sub-entity we'll switch to
+        to_subtype: subEntityType,      // type of the sub-entity we'll switch to
+        url: redirectUrl                // URL to load after the switch is made
+      },
+      (notification) => {
+        promise.resolve(notification); // TODO REJECT on error
+      },
+      {
+        ttr: Math.max(this.defaultTimeout - 5, 5),
+        validity: this.defaultTimeout,
+        timeout: this.defaultTimeout
+      }
+    );
+    return promise;
+  }
+
   /**
    * Validate the current access token, retrieve access token (session) from cookie and set on websocket
    */
@@ -464,14 +508,26 @@ class CasperSocket extends PolymerElement {
     }
   }
 
+
+  //***************************************************************************************//
+  //                                                                                       //
+  //                              ~~~ Entity Logout ~~~                                 //
+  //                                                                                       //
+  //***************************************************************************************//
+
+  logOutFromEntity (url) {
+    this.switchToEntity(null, url, null, null, true);
+  }
+
   //***************************************************************************************//
   //                                                                                       //
   //                              ~~~ Entity switching ~~~                                 //
   //                                                                                       //
   //***************************************************************************************//
 
-  switchToEntity (entityId, redirectUrl, subEntityId, subEntityType) {
+  switchToEntity (entityId, redirectUrl, subEntityId, subEntityType, leave_demo) {
     this.submitJob({
+        leave_demo             : leave_demo,
         tube                   : this._switchEntityQueue,
         access_token           : null,                      // will be set by server from session data
         refresh_token          : null,                      // will be set by server from session data
@@ -514,7 +570,11 @@ class CasperSocket extends PolymerElement {
         }
       }
     } else {
-      this._showOverlay({message: 'Falha na mudança de empresa', icon: 'error' });
+      if ( notification.status_code === 406 ) {
+        this._showOverlay({ message: notification.message[0], icon: 'error' });
+      } else {
+        this._showOverlay({message: 'Falha na mudança de empresa', icon: 'error' });
+      }
     }
   }
 
@@ -643,7 +703,7 @@ class CasperSocket extends PolymerElement {
     if ( motion ) {
       params.input.motion = motion;
     }
-    return this._sendAsync(true, 'SET', { target: 'document', id: id }, params);
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, params, -1);
   }
 
   sendClick (id, x, y, callback) {
@@ -677,7 +737,7 @@ class CasperSocket extends PolymerElement {
     return this._sendAsync(true, 'ADD', { target: 'document', id: id }, { band: { type: type, id: bandId}});
   }
 
-  deleteBand (id, type, bandId, callback) {
+  deleteBand (id, type, bandId) {
     return this._sendAsync(true, 'REMOVE', { target: 'document', id: id }, { band: { type: type, id: bandId}});
   }
 
@@ -773,7 +833,7 @@ class CasperSocket extends PolymerElement {
   //***************************************************************************************//
 
   /**
-   * Send command to the HTTP micro service brige with a promise for aysnc / await use
+   * Send command to the HTTP micro service brige with a promise for async / await use
    *
    * @param {String} verb the HTTP verb to use (GET, PUT, POST, PATCH, DELETE)
    * @param {String} url the target URL
@@ -791,11 +851,11 @@ class CasperSocket extends PolymerElement {
    * @param {String} verb the command verb to use
    * @param {Object} options the command options
    * @param {Object} params the command parameters
-   * @param {Number} timeout in seconds
+   * @param {Number} timeout in seconds (use -1 to disable)
    */
   _sendAsync (isUserActivity, verb, options, params, timeout) {
     const ivk     = this._selectInvokeId();
-    const tid     = setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000);
+    const tid     = timeout ==  -1 ? undefined : (setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000));
     const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
     this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk, jsonapi: options.jsonapi });
     if ( isUserActivity ) {
@@ -948,6 +1008,8 @@ class CasperSocket extends PolymerElement {
                     payload.data.attributes.id = payload.data.id;
                     payload.data = payload.data.attributes;
                   }
+                } else {
+                  request.promise.reject(payload.errors);
                 }
               }
               if ( request.promise ) {
@@ -1387,6 +1449,18 @@ class CasperSocket extends PolymerElement {
 
   jget (urn, timeout) {
     return this._sendAsync(false, 'GET', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
+  }
+
+  jpost (urn, body, timeout) {
+    return this._sendAsync(false, 'POST', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
+  }
+
+  jpatch (urn, body, timeout) {
+    return this._sendAsync(false, 'PATCH', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
+  }
+
+  jdelete (urn, timeout) {
+    return this._sendAsync(false, 'DELETE', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
   }
 }
 
