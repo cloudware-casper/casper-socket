@@ -1037,7 +1037,12 @@ class CasperSocket extends PolymerElement {
               let status_code = parseInt(response);
               response = response.substring(response.indexOf(':') + 1);
               if (response.length) {
-                payload = JSON.parse(response);
+                try {
+                  payload = JSON.parse(response);
+                } catch (exception) {
+                  status_code = 500;
+                  payload = { error: 'Invalid JSON data from server' };
+                }
               }
               if (status_code >= 100 && status_code < 299) {
                 request.promise.resolve(payload);
