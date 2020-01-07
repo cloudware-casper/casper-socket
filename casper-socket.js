@@ -732,6 +732,10 @@ class CasperSocket extends PolymerElement {
     return this._sendAsync(false /* TODO CHECK*/, 'GET', { target: 'document', id: id }, { hint: { x: 1.0 * x.toFixed(2), y: 1.0 * y.toFixed(2) } });
   }
 
+  getBandDri (id, bandType, bandIdx) {
+    return this._sendAsync(false, 'GET', { target: 'document', id: id }, { band: {type: bandType, id: bandIdx}});
+  }
+
   addBand (id, type, bandId) {
     return this._sendAsync(true, 'ADD', { target: 'document', id: id }, { band: { type: type, id: bandId } });
   }
