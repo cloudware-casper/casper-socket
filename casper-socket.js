@@ -1462,60 +1462,6 @@ class CasperSocket extends PolymerElement {
   jdelete (urn, timeout) {
     return this._sendAsync(false, 'DELETE', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
   }
-
-  //***************************************************************************************//
-  //                                                                                       //
-  //            ~~~ Access to upstream RESTful microservices via Broker ~~~                //
-  //                                                                                       //
-  //***************************************************************************************//
-
-  async brokerget (url) {
-    return this.__formatBrokerResponse(await this.__requestBroker('GET', url));
-  }
-
-  async brokerpost (url, body) {
-    return this.__formatBrokerResponse(await this.__requestBroker('POST', url, body));
-  }
-
-  async brokerpatch (url, body) {
-    return this.__formatBrokerResponse(await this.__requestBroker('PATCH', url, body));
-  }
-
-  async brokerdelete (url) {
-    return this.__formatBrokerResponse(await this.__requestBroker('DELETE', url));
-  }
-
-  async __requestBroker (method, requestUrl, requestBody) {
-    const fetchSettings = {
-      method: method,
-      headers: new Headers({
-        'Authorization': `Bearer ${CasperSocket.readCookie('casper_session')}`,
-        'Content-Type': 'application/vnd.api+json'
-      })
-    };
-
-    // Only include the body unless we're dealing GET and HEAD methods. Otherwise the fetch will error out.
-    if (!['GET', 'HEAD'].includes(method) && !!requestBody) {
-      fetchSettings.body = JSON.stringify(requestBody);
-    }
-
-    try {
-      const fetchResponse = await fetch(`${window.app.session_data.app.config.api_url}/${requestUrl}`, fetchSettings);
-
-      return await fetchResponse.json();
-    } catch (exception) {
-      console.error(exception);
-    }
-  }
-
-  __formatBrokerResponse (brokerResponse) {
-    if (brokerResponse.errors) return console.error(brokerResponse.errors);
-    if (!brokerResponse.data) return;
-
-    return brokerResponse.data.constructor.name === 'Object'
-      ? { id: brokerResponse.data.id, ...brokerResponse.data.attributes }
-      : brokerResponse.data.map(item => ({ id: item.id, ...item.attributes }));
-  }
 }
 
 window.customElements.define(CasperSocket.is, CasperSocket);
