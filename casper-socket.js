@@ -318,6 +318,30 @@ class CasperSocket extends PolymerElement {
     }
   }
 
+  async signOutViaApi () {
+    let failed = false;
+
+    try {
+      if (this.sessionCookie) {
+        const request = await fetch('/login/sign-out', {
+              headers: {
+                'x-casper-access-token': this.sessionCookie,
+                'Content-Type': 'application/json'
+              }
+            });
+        failed = request.status != 200;
+      }
+    } catch (exception) {
+      // ... ignore and proceed with the the logout
+      failed = true;
+    } finally {
+      this.wipeCredentials();
+    }
+    if (failed) {
+      this.dispatchEvent(new CustomEvent('casper-signed-out', { bubbles: true, composed: true }));
+    }
+  }
+
   signOut () {
     let failed = false;
 
