@@ -66,12 +66,6 @@ class CasperSocket extends PolymerElement {
         type: String,
         value: 'casper-epaper'
       },
-      /** Tube prefix */
-      tubePrefix: {
-        type: String,
-        value: 'casper',
-        observer: '_onTubePrefixChanged'
-      },
       /** Define to use cookies valid for all sub domains of this domain */
       cookieDomain: {
         type: String,
@@ -603,29 +597,6 @@ class CasperSocket extends PolymerElement {
       );
     }
     this._switchResponse = undefined;
-  }
-
-  // TODO KILL ME KILL ME
-  switchToSubEntity (subEntityType, subEntityId, redirectUrl) {
-    this.submitJob({
-      tube: this._switchSubEntityQueue,
-      access_token: null,             // will be set by server from session data
-      refresh_token: null,             // will be set by server from session data
-      url: redirectUrl,      // URL to load after the switch is made
-      to_subtype: subEntityType,    // Subentity type
-      to_subentity_id: subEntityId       // Subentity identifier
-    },
-      this._switchEntityListener.bind(this), {
-      ttr: 60,
-      validity: 70,
-      timeout: 10,
-      overlay: {
-        message: 'A mudar ano fiscal',
-        spinner: true,
-        icon: 'switch'
-      }
-    }
-    );
   }
 
   //***************************************************************************************//
@@ -1164,15 +1135,6 @@ class CasperSocket extends PolymerElement {
       this._subscriptions = new Map();      // Registry of server subscriptions, key is channel
     }
     this._applicationInactive = false;
-  }
-
-  /**
-   * Observer to initialize the beanstalkd tube names
-   */
-  _onTubePrefixChanged () {
-    this.refreshTube = this.tubePrefix + '-token-refresh';
-    this.extendTube = this.tubePrefix + '-session-extend';
-    this._switchEntityQueue = this.tubePrefix + '-switch-entity';
   }
 
   /**
