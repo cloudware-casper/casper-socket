@@ -314,7 +314,7 @@ class CasperSocket extends PolymerElement {
 
   /**
    * Switch the current entity or sub-entity using the HTPP bridge to access an interal microservice
-   * 
+   *
    * @param {Object} body the payload to send on the put request, must have a known 'action'
    */
   async switchViaBridge (body) {
@@ -326,22 +326,22 @@ class CasperSocket extends PolymerElement {
 
       // ... make the request and handle the response using he appropriate action listner ...
       switch (body.action) {
-      case 'impersonate':
-      case 'stop-impersonation':
-        response = await this.hput(this.app.cdbUrl + '/entity/impersonate', body);
-        this.loginListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
-        break;
-      case 'switch':
-        response = await this.hput(this.app.cdbUrl + '/entity/switch', body);
-        this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
-        break;
-      case 'sub-switch':
-        response = await this.hput(this.app.cdbUrl + '/entity/sub-switch', body);
-        this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
-        return;
+        case 'impersonate':
+        case 'stop-impersonation':
+          response = await this.hput(this.app.cdbUrl + '/entity/impersonate', body);
+          this.loginListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+          return response;
+        case 'switch':
+          response = await this.hput(this.app.cdbUrl + '/entity/switch', body);
+          this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+          return response;
+        case 'sub-switch':
+          response = await this.hput(this.app.cdbUrl + '/entity/sub-switch', body);
+          this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+          return response;
       }
     } catch (e) {
-      if ( e.status_code == 504 ) {
+      if (e.status_code == 504) {
         this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
       } else {
         this._showOverlay({ message: `Erro ${e.error} (${e.status_code})`, icon: 'error' });
@@ -353,11 +353,11 @@ class CasperSocket extends PolymerElement {
     try {
       if (this.sessionCookie) {
         const request = await fetch('/login/sign-out', {
-              headers: {
-                'x-casper-access-token': this.sessionCookie,
-                'Content-Type': 'application/json'
-              }
-            });
+          headers: {
+            'x-casper-access-token': this.sessionCookie,
+            'Content-Type': 'application/json'
+          }
+        });
       }
     } catch (exception) {
       // ... ignore and proceed with the the logout
@@ -699,7 +699,7 @@ class CasperSocket extends PolymerElement {
   }
 
   getBandDri (id, bandType, bandIdx) {
-    return this._sendAsync(false, 'GET', { target: 'document', id: id }, { band: {type: bandType, id: bandIdx}});
+    return this._sendAsync(false, 'GET', { target: 'document', id: id }, { band: { type: bandType, id: bandIdx } });
   }
 
   addBand (id, type, bandId) {
