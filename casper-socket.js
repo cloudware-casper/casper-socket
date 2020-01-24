@@ -996,7 +996,7 @@ class CasperSocket extends PolymerElement {
             } else if ((payload_start = data.indexOf(':E:{')) === offset) {
               payload = JSON.parse(data.substring(payload_start + 3));
               if (request.promise !== undefined) {
-                request.promise.reject({ error: "Unknown error", status_code: 500 });
+                request.promise.reject({ error: "Unknown error", status_code: 500, payload_errors: payload.errors });
                 clearTimeout(timerId);
                 this._activeRequests.delete(invokeId);
                 this._freeInvokeId(invokeId);
