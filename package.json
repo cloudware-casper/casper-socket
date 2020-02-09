@@ -1,7 +1,7 @@
 {
   "description": "Websocket client for casper server",
   "name": "@casper2020/casper-socket",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "resolutions": {
     "inherits": "2.0.3",
     "samsam": "1.1.3",
