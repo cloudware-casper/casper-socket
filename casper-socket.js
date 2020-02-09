@@ -461,40 +461,6 @@ class CasperSocket extends PolymerElement {
     }
   }
 
-  extendSession () {
-    this.submitJob({
-      tube: this.extendTube,
-      access_token: null
-    },
-      this._extendSessionResponse.bind(this), {
-      ttr: Math.max(this.defaultTimeout - 5, 5),
-      validity: this.defaultTimeout,
-      timeout: this.defaultTimeout,
-      overlay: {
-        message: 'Renovação sessão iniciada',
-        icon: 'connecting',
-        spinner: true,
-        loading_icon: 'loading-icon-03'
-      }
-    }
-    );
-  }
-
-  _extendSessionResponse (response) {
-    if (response.status_code !== 200 || (response.success !== undefined && response.success !== true)) {
-      window.location = '/login';
-    } else if (response.status === 'completed' && response.status_code === 200) {
-      if (response.response === undefined) {
-        window.location = '/login';
-      } else {
-        this._accessToken = response.response.access_token;
-        this.saveSessionCookie(response.response.access_token, response.response.access_ttl, response.response.issuer_url);
-        this.validateSession();
-      }
-    }
-  }
-
-
   //***************************************************************************************//
   //                                                                                       //
   //                              ~~~ Entity Logout ~~~                                 //
@@ -1180,7 +1146,7 @@ class CasperSocket extends PolymerElement {
         console.log('TTL is ~', this._accessValidity - now);
       }
       if (this._accessValidity - now < this.sessionRenewTolerance) {
-        this.extendSession();
+        // TODO new extend !!!!
         this._accessValidity = undefined;
       }
     }
