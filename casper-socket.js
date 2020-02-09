@@ -1113,7 +1113,7 @@ class CasperSocket extends PolymerElement {
     this._documents.clear();
     this._subscriptions.forEach(function (subscription, channel, subs) {
       if (!(subscription.notification && subscription.confirmed)) {
-        map.delete(key);
+        subs.delete(channel);
       }
     });
     this._initData(false);
