@@ -26,7 +26,7 @@ import { PolymerElement } from '@polymer/polymer/polymer-element.js';
  *
  * from https://stackoverflow.com/questions/26150232/resolve-javascript-promise-outside-function-scope
  */
-class CasperSocketPromise {
+export class CasperSocketPromise {
   constructor() {
     this._promise = new Promise((resolve, reject) => {
       // assign the resolve and reject functions to `this`
@@ -41,7 +41,7 @@ class CasperSocketPromise {
   }
 }
 
-class CasperSocket extends PolymerElement {
+export class CasperSocket extends PolymerElement {
 
   static get is () {
     return 'casper-socket';
@@ -124,7 +124,6 @@ class CasperSocket extends PolymerElement {
 
     // ... install global listeners to detect user activity
     document.addEventListener('mouseout', this._boundMouseOutListener);
-    //document.addEventListener('click',    this._boundUserActivity);  TODO why is this commented???
     document.addEventListener('keypress', this._boundUserActivity);
     window.addEventListener('blur', this._boundApplicationInactive);
   }
@@ -141,14 +140,13 @@ class CasperSocket extends PolymerElement {
 
     // ... cleanup global listeners
     document.removeEventListener('mouseout', this._boundMouseOutListener);
-    //document.removeEventListener('click',    this._boundUserActivity);  TODO why is this commented???
     document.removeEventListener('keypress', this._boundUserActivity);
     window.removeEventListener('blur', this._boundApplicationInactive);
   }
 
   connect () {
     this._ws_url = this.url + ((this.port != undefined && this.port !== '') ? ':' + this.port : '') + '/' + this.path;
-    if (typeof MozWebSocket != "undefined") {
+    if ( typeof MozWebSocket !== 'undefined' ) {
       this._socket = new MozWebSocket(this._ws_url, this.webSocketProtocol);
     } else {
       this._socket = new WebSocket(this._ws_url, this.webSocketProtocol);
@@ -313,7 +311,7 @@ class CasperSocket extends PolymerElement {
   }
 
   /**
-   * Switch the current entity or sub-entity using the HTPP bridge to access an interal microservice
+   * Switch the current entity or sub-entity using the HTTP bridge to access an interal microservice
    *
    * @param {Object} body the payload to send on the put request, must have a known 'action'
    */
