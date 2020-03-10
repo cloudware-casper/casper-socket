@@ -92,7 +92,7 @@ export class CasperSocket extends PolymerElement {
   /**
    * @brief Assign defaults to undefined component attributes
    */
-  constructor() {
+  constructor () {
     super();
     if (this.url === undefined) {
       if (window.location.protocol === 'https:') {
@@ -154,6 +154,25 @@ export class CasperSocket extends PolymerElement {
     this._socket.onmessage = this._onSocketMessage.bind(this);
     this._socket.onopen = this._onSocketOpen.bind(this);
     this._socket.onclose = this._onSocketClose.bind(this);
+  }
+
+  _connectAsync (url) {
+    const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
+    const tid = setTimeout(() => {
+      promise.reject('connect timeout');
+    }, 3000);
+    if ( typeof MozWebSocket !== 'undefined' ) {
+      this._socket = new MozWebSocket(url, this.webSocketProtocol);
+    } else {
+      this._socket = new WebSocket(url, this.webSocketProtocol);
+    }
+    this._socket.onmessage = this._onSocketMessage.bind(this);
+    this._socket.onclose = this._onSocketClose.bind(this);
+    this._socket.onopen = () => {
+      clearTimeout(tid); 
+      promise.resolve(true);   
+    };
+    return promise;
   }
 
   /**
@@ -310,62 +329,6 @@ export class CasperSocket extends PolymerElement {
     }
   }
 
-  /**
-   * Switch the current entity or sub-entity using the HTTP bridge to access an interal microservice
-   *
-   * @param {Object} body the payload to send on the put request, must have a known 'action'
-   */
-  async switchViaBridge (body) {
-    try {
-      let response;
-
-      // ... block the user interface while the request is in fligth ...
-      this._showOverlay({ message: 'Por favor aguarde', icon: 'switch', spinner: true, noCancelOnOutsideClick: true });
-
-      // ... make the request and handle the response using he appropriate action listner ...
-      switch (body.action) {
-        case 'impersonate':
-        case 'stop-impersonation':
-          response = await this.hput(this.app.cdbUrl + '/entity/impersonate', body);
-          this.loginListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
-          return response;
-        case 'switch':
-          response = await this.hput(this.app.cdbUrl + '/entity/switch', body);
-          this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
-          return response;
-        case 'sub-switch':
-          response = await this.hput(this.app.cdbUrl + '/entity/sub-switch', body);
-          this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
-          return response;
-      }
-    } catch (e) {
-      if (e.status_code == 504) {
-        this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
-      } else {
-        this._showOverlay({ message: `Erro ${e.error} (${e.status_code})`, icon: 'error' });
-      }
-    }
-  }
-
-  async signOutViaApi () {
-    try {
-      if (this.sessionCookie) {
-        const request = await fetch('/login/sign-out', {
-          headers: {
-            'x-casper-access-token': this.sessionCookie,
-            'Content-Type': 'application/json'
-          }
-        });
-      }
-    } catch (exception) {
-      // ... ignore and proceed with the the logout
-    } finally {
-      this.disconnect();
-      this.wipeCredentials();
-      window.location = '/login';
-    }
-  }
-
   async _disconnectAsync () {
     const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
     const tid = setTimeout(() => {
@@ -466,8 +429,27 @@ export class CasperSocket extends PolymerElement {
   //***************************************************************************************//
 
   // TODO KILL ME KILL
-  logOutFromEntity (url) {
+  /*logOutFromEntity (url) {
     this.switchToEntity(null, url, null, null, true);
+  }*/
+
+  async signOutViaApi () {
+    try {
+      if (this.sessionCookie) {
+        const request = await fetch('/login/sign-out', {
+          headers: {
+            'x-casper-access-token': this.sessionCookie,
+            'Content-Type': 'application/json'
+          }
+        });
+      }
+    } catch (exception) {
+      // ... ignore and proceed with the the logout
+    } finally {
+      this.disconnect();
+      this.wipeCredentials();
+      window.location = '/login';
+    }
   }
 
   //***************************************************************************************//
@@ -476,6 +458,15 @@ export class CasperSocket extends PolymerElement {
   //                                                                                       //
   //***************************************************************************************//
 
+  async connectAndSetSession (url, accessToken) {
+    this._initData();
+    await this._connectAsync(url);
+    await this._setSessionAsync(accessToken);
+  }
+  
+  /*
+  // TODO KILL ME KILL
+  
   switchToEntity (entityId, redirectUrl, subEntityId, subEntityType, leave_demo) {
     this.submitJob({
       leave_demo: leave_demo,
@@ -505,6 +496,43 @@ export class CasperSocket extends PolymerElement {
       }
     }
     );
+  }*/
+
+  /**
+   * Switch the current entity or sub-entity using the HTTP bridge to access an interal microservice
+   *
+   * @param {Object} body the payload to send on the put request, must have a known 'action'
+   */
+  async switchViaBridge (body) {
+    try {
+      let response;
+
+      // ... block the user interface while the request is in fligth ...
+      this._showOverlay({ message: 'Por favor aguarde', icon: 'switch', spinner: true, noCancelOnOutsideClick: true });
+
+      // ... make the request and handle the response using he appropriate action listner ...
+      switch (body.action) {
+        case 'impersonate':
+        case 'stop-impersonation':
+          response = await this.hput(this.app.cdbUrl + '/entity/impersonate', body);
+          this.loginListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+          return response;
+        case 'switch':
+          response = await this.hput(this.app.cdbUrl + '/entity/switch', body);
+          this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+          return response;
+        case 'sub-switch':
+          response = await this.hput(this.app.cdbUrl + '/entity/sub-switch', body);
+          this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+          return response;
+      }
+    } catch (e) {
+      if (e.status_code == 504) {
+        this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
+      } else {
+        this._showOverlay({ message: `Erro ${e.error} (${e.status_code})`, icon: 'error' });
+      }
+    }
   }
 
   _switchEntityListener (notification) {
