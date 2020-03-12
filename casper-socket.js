@@ -343,6 +343,10 @@ export class CasperSocket extends PolymerElement {
     return this._sendAsync(false, 'SET', { target: 'session' }, { access_token: accessToken });
   }
 
+  async _extendSessionAsync () {
+    return this._sendAsync(false, 'EXTEND', { target: 'session' }, { });
+  }
+
   /**
    * Validate the current access token, retrieve access token (session) from cookie and set on websocket
    */
