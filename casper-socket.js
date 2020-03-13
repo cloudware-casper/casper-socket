@@ -76,15 +76,15 @@ export class CasperSocket extends PolymerElement {
         type: Number,
         value: 10
       },
-      /** Time the web socket is kept open after the user becomes idle, must be less than sessionRenewTolerance */
+      /** Time in seconds the web socket is kept open after the user becomes idle, must be less than sessionRenewTolerance */
       userIdleTimeout: {
         type: Number,
-        value: 20
+        value: 180
       },
       /** Lower limit for session time to live, when the ttl gets bellow this the session will be refreshed */
       sessionRenewTolerance: {
         type: Number,
-        value: 3500
+        value: 3600
       }
     }
   }
@@ -343,8 +343,8 @@ export class CasperSocket extends PolymerElement {
     return this._sendAsync(false, 'SET', { target: 'session' }, { access_token: accessToken });
   }
 
-  async _extendSessionAsync () {
-    return this._sendAsync(false, 'EXTEND', { target: 'session' }, { });
+  async _extendSessionAsync (timeout) {
+    return this._sendAsync(false, 'EXTEND', { target: 'session' }, { }, timeout);
   }
 
   /**
@@ -1154,8 +1154,7 @@ export class CasperSocket extends PolymerElement {
     this.dispatchEvent(new CustomEvent('casper-dismiss-overlay', {
       bubbles: true,
       composed: true
-    })
-    );
+    }));
   }
 
   /**
@@ -1163,21 +1162,30 @@ export class CasperSocket extends PolymerElement {
    *
    * @param {Object} The event created by user activity (ignored)
    */
-  userActivity (event) {
+  async userActivity (event) {
     if (this._applicationInactive === true) {
       this._applicationInactive = false;
       this.checkIfSessionChanged();
     }
     this._startIdleTimer();
-    if (this._accessValidity !== undefined) {
-
-      let now = new Date().valueOf() / 1000;
+    if ( this._accessValidity !== undefined ) {
+      const now = new Date().valueOf() / 1000;
       if (true) {
         console.log('TTL is ~', this._accessValidity - now);
       }
       if (this._accessValidity - now < this.sessionRenewTolerance) {
-        // TODO new extend !!!!
-        this._accessValidity = undefined;
+        try {
+          const response = await this._extendSessionAsync(3000);
+          if ( response.success === true ) {
+            this.saveSessionCookie(this._accessToken, response.ttl - 30, this.issuerUrl);
+            this._accessValidity = this.sessionValidity; // read back from cookie
+          }
+        } catch (e) {
+          console.log(e);
+        }
+        if (true) {
+          console.log('NEW TTL is ~', this._accessValidity - now);
+        }
       }
     }
   }
@@ -1206,17 +1214,26 @@ export class CasperSocket extends PolymerElement {
    *
    * @note Suspension is prevented when a wizard is opened or generally speaking a server job is pending
    */
-  _userIdleTimeout (event) {
+  async _userIdleTimeout (event) {
     for (let subscription of this._subscriptions.values()) {
       if (subscription.confirmed === true && subscription.job === true) {
         console.warn('refusing to go idle because at least one job subscription is active');
         return;
       }
     }
-    this._applicationInactive = true;
-    this._showOverlay({ message: 'Sessão suspensa por inatividade', icon: 'cloud', opacity: 0.15 });
-    this._silentDisconnect = true;
-    this.disconnect();
+    try {
+      const response = await this._extendSessionAsync(3000);
+      if ( response.success === true ) {
+        this.saveSessionCookie(this._accessToken, response.ttl - 30, this.issuerUrl);
+      }
+    } catch (e) {
+      console.log(e);
+    } finally {
+      this._applicationInactive = true;
+      this._showOverlay({ message: 'Sessão suspensa por inatividade', icon: 'cloud', opacity: 0.15 });
+      this._silentDisconnect = true;
+      this.disconnect();  
+    }
   }
 
   /**
@@ -1239,6 +1256,13 @@ export class CasperSocket extends PolymerElement {
   //                                                                                       //
   //***************************************************************************************//
 
+  /**
+   * Save the cookie
+   * 
+   * @param {String} name   cookie name
+   * @param {String} value  value of the cookie
+   * @param {Number} ttl    time to live in seconds
+   */
   saveCookie (name, value, ttl) {
     let cookie = `${name}=${value};path=/`;
 
@@ -1258,7 +1282,9 @@ export class CasperSocket extends PolymerElement {
   }
 
   /**
-   * Clears a cookie
+   * Clears the cookie
+   * 
+   * @param {String} name   cookie name
    */
   deleteCookie (name) {
     let cookie = `${name}=`;
@@ -1279,7 +1305,7 @@ export class CasperSocket extends PolymerElement {
   saveSessionCookie (accessToken, ttl, issuer_url) {
     this.saveCookie('casper_session', accessToken, ttl);
     if (issuer_url) {
-      this.saveCookie('casper_issuer', issuer_url);
+      this.saveCookie('casper_issuer', issuer_url, ttl);
     }
     if (ttl) {
       this.saveCookie('casper_validity', (new Date().valueOf()) / 1000 + ttl, ttl);
@@ -1303,8 +1329,8 @@ export class CasperSocket extends PolymerElement {
   /**
    * Read back a cookie from the cookie jar
    *
-   * @param cookie name of the key
-   * @param minLength minimum length of the cookie
+   * @param {String} cookie name of the key
+   * @param {Number} minLength minimum length of the cookie
    * @return cookie value or undefined if the cookie does not exist or it's too short
    */
   static readCookie (cookie, minLength) {
