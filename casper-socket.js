@@ -245,8 +245,10 @@ export class CasperSocket extends PolymerElement {
       if (subscribe) {
         this._subscriptions.set(response.channel, { handler: request.handler, timer: request.timer, invokeId: request.invokeId, confirmed: true, job: true });
       }
-      if (request.handler !== undefined && response.status_code !== undefined && response.status !== undefined) {
-        request.handler(response);
+      if ( request.handler !== undefined ) {
+        if ( (response.status_code !== undefined && response.status !== undefined) || (request.options && request.options.handleWithoutStatus) ) {
+          request.handler(response);
+        }
       }
     } else {
       request.handler({
@@ -295,8 +297,19 @@ export class CasperSocket extends PolymerElement {
     let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
     let p = jobChannel.split(':');
     let request = { tube: p[0], id: p[1], callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':CANCEL:' + JSON.stringify({ target: 'job-queue', tube: request.tube, id: request.id }));
+    this._send(ivk + ':CANCEL:' + JSON.stringify({ target: 'job-queue', tube: request.tube, id: parseInt(request.id), status: 'cancelled' }));
     this._activeRequests.set(ivk, request);
+  }
+
+  /**
+   * Async version of cancel job 
+   * 
+   * @param {String} jobChannel Id of the job channel in format tube:id
+   * @param {Number} timeout in seconds 
+   */
+  cancelJobAsync (jobChannel, timeout) {
+    const p = jobChannel.split(':');
+    return this._sendAsync(false, 'CANCEL', { target: 'job-queue', tube: p[0], id: parseInt(p[1]), status: 'cancelled' }, {}, timeout);
   }
 
   //***************************************************************************************//
@@ -468,40 +481,6 @@ export class CasperSocket extends PolymerElement {
     await this._setSessionAsync(accessToken);
   }
   
-  /*
-  // TODO KILL ME KILL
-  
-  switchToEntity (entityId, redirectUrl, subEntityId, subEntityType, leave_demo) {
-    this.submitJob({
-      leave_demo: leave_demo,
-      tube: this._switchEntityQueue,
-      access_token: null,                      // will be set by server from session data
-      refresh_token: null,                      // will be set by server from session data
-      impersonator_email: null,
-      impersonator_role_mask: null,
-      impersonator_id: null,
-      impersonator_entity_id: null,
-      role_mask: null,
-      entity_id: null,
-      user_id: null,
-      to_entity_id: entityId,                  // id of the entity we'll switch to
-      to_subentity_id: subEntityId,               // id of the sub-entity we'll switch to
-      to_subtype: subEntityType,             // type of the sub-entity we'll switch to
-      url: redirectUrl                // URL to load after the switch is made
-    },
-      this._switchEntityListener.bind(this), {
-      ttr: Math.max(this.defaultTimeout - 5, 5),
-      validity: this.defaultTimeout,
-      timeout: this.defaultTimeout,
-      overlay: {
-        message: 'A mudar de empresa',
-        spinner: true,
-        icon: 'switch'
-      }
-    }
-    );
-  }*/
-
   /**
    * Switch the current entity or sub-entity using the HTTP bridge to access an interal microservice
    *
