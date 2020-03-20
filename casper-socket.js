@@ -81,7 +81,7 @@ export class CasperSocket extends PolymerElement {
         type: Number,
         value: 180
       },
-      /** Lower limit for session time to live, when the ttl gets bellow this the session will be refreshed */
+      /** Lower limit for session time to live, when the ttl gets bellow this the session will be extended */
       sessionRenewTolerance: {
         type: Number,
         value: 3600
