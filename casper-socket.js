@@ -318,30 +318,6 @@ export class CasperSocket extends PolymerElement {
   //                                                                                       //
   //***************************************************************************************//
 
-  loginListener (notification) {
-    try {
-      if (notification.status === 'completed' && notification.status_code === 200) {
-        this.saveSessionCookie(notification.response.access_token, notification.response.access_ttl, notification.response.issuer_url);
-        this._silentDisconnect = true;
-        this.disconnect();
-        if (notification.response.url !== undefined) {
-          window.location = notification.response.url;
-        }
-      } else if (notification.status === 'error') {
-        if (notification.status_code === 401) {
-          this.dispatchEvent(new CustomEvent('casper-forbidden', { bubbles: true, composed: true, detail: { message: notification.message } }));
-        } else {
-          this.dispatchEvent(new CustomEvent('casper-error', { bubbles: true, composed: true, detail: { message: notification.message } }));
-        }
-      }
-    } catch (exception) {
-      console.log(exception);
-      this.dispatchEvent(new CustomEvent('casper-error', { bubbles: true, composed: true, detail: { message: notification.message } }));
-    } finally {
-      this.disconnect();
-    }
-  }
-
   async _disconnectAsync () {
     const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
     const tid = setTimeout(() => {
@@ -401,11 +377,6 @@ export class CasperSocket extends PolymerElement {
       this.deleteSessionCookie();
       this.dispatchEvent(new CustomEvent('casper-signed-out', { bubbles: true, composed: true }));
     } else {
-      if (response.refresh_token) {
-        window.localStorage.setItem('casper-refresh-token', response.refresh_token);
-      } else {
-        window.localStorage.removeItem('casper-refresh-token');
-      }
       if (response.entity_id) {
         window.localStorage.setItem('casper-last-entity-id', response.entity_id);
         this._manageNotifications(response.entity_id);
@@ -444,11 +415,6 @@ export class CasperSocket extends PolymerElement {
   //                              ~~~ Entity Logout ~~~                                 //
   //                                                                                       //
   //***************************************************************************************//
-
-  // TODO KILL ME KILL
-  /*logOutFromEntity (url) {
-    this.switchToEntity(null, url, null, null, true);
-  }*/
 
   async signOutViaApi () {
     try {
@@ -490,23 +456,47 @@ export class CasperSocket extends PolymerElement {
     try {
       let response;
 
-      // ... block the user interface while the request is in fligth ...
+      // ... block the user interface while the request is in flight ...
       this._showOverlay({ message: 'Por favor aguarde', icon: 'switch', spinner: true, noCancelOnOutsideClick: true });
 
-      // ... make the request and handle the response using he appropriate action listner ...
+      // ... make the request and handle the response ...
       switch (body.action) {
         case 'impersonate':
         case 'stop-impersonation':
+
+          // ... when impersonating or exiting impersonation it's assumed the caller app will always reload the page
           response = await this.hput(this.app.cdbUrl + '/entity/impersonate', body);
-          this.loginListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+          this.saveSessionCookie(response.access_token, response.access_ttl, response.issuer_url);
           return response;
+
         case 'switch':
+
+          // ... when switching entities it's assumed the caller app will always reload the page
           response = await this.hput(this.app.cdbUrl + '/entity/switch', body);
-          this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+          this.saveSessionCookie(response.access_token, response.access_ttl, response.issuer_url);
           return response;
+
         case 'sub-switch':
+
+          // ... sub-entity switches are soft, they do not reload the page
           response = await this.hput(this.app.cdbUrl + '/entity/sub-switch', body);
-          this._switchEntityListener({ status: 'completed', status_code: 200, response: response }); // TODO make this simpler
+
+          // ... save the token, if we reload now it will be validaded by page load sequence ...
+          this.saveSessionCookie(response.access_token, response.access_ttl, response.issuer_url);
+
+          // ... here we assume the caller will not reload the page, so the session must be updated ...
+          await this._setSessionAsync(response.access_token);
+
+          // ... now that the session is validated save on local var to avoid a spurious kicking ...
+          this._accessToken = response.access_token;
+          this._dismissOverlay();
+
+          // ... notify the application 
+          this.dispatchEvent(new CustomEvent('casper-signed-in', {
+            bubbles: true,
+            composed: true,
+            detail: response
+          }));
           return response;
       }
     } catch (e) {
@@ -516,62 +506,6 @@ export class CasperSocket extends PolymerElement {
         this._showOverlay({ message: `Erro ${e.error} (${e.status_code})`, icon: 'error' });
       }
     }
-  }
-
-  _switchEntityListener (notification) {
-    if (notification.status === 'completed' && notification.status_code === 200) {
-      if (notification.response.url[0] === '/') {
-        // ... we are on the same cluster ...
-        this._switchResponse = notification.response;
-        this._setSession(notification.response.access_token, this._validateSwitchSessionResponse.bind(this));
-      } else {
-        // ... we moved to another cluster ...
-        this.saveSessionCookie(notification.response.access_token, notification.response.access_ttl, notification.response.issuer_url);
-        if (notification.response.url !== undefined) {
-          window.location = notification.response.url;
-        }
-      }
-    } else {
-      if (notification.status_code === 406) {
-        this._showOverlay({ message: notification.message[0], icon: 'error' });
-      } else {
-        this._showOverlay({ message: 'Falha na mudança de empresa', icon: 'error' });
-      }
-    }
-  }
-
-  _validateSwitchSessionResponse (response) {
-    if (response.success === false) {
-      this.deleteSessionCookie();
-      this.dispatchEvent(new CustomEvent('casper-signed-out', { bubbles: true, composed: true }));
-    } else {
-      if (this._switchResponse !== undefined) {
-        this._accessToken = this._switchResponse.access_token;
-        this._accessValidity = (new Date().valueOf()) / 1000 + this._switchResponse.access_ttl; // same value saved on casper-validity cookie
-        this.saveSessionCookie(this._switchResponse.access_token, this._switchResponse.access_ttl, this._switchResponse.issuer_url);
-        if (this._switchResponse.user_email) {
-          this.savedEmail = this._switchResponse.user_email;
-        }
-        if (response.refresh_token) {
-          window.localStorage.setItem('casper-refresh-token', response.refresh_token);
-        } else {
-          window.localStorage.removeItem('casper-refresh-token');
-        }
-        if (response.entity_id) {
-          window.localStorage.setItem('casper-last-entity-id', response.entity_id);
-          this._manageNotifications(response.entity_id);
-        }
-      }
-      response.url = this._switchResponse.url;
-      this._startIdleTimer();
-      this.dispatchEvent(new CustomEvent('casper-signed-in', {
-        bubbles: true,
-        composed: true,
-        detail: response
-      })
-      );
-    }
-    this._switchResponse = undefined;
   }
 
   //***************************************************************************************//
@@ -1358,7 +1292,6 @@ export class CasperSocket extends PolymerElement {
     this.deleteCookie('casper_issuer');
     this.deleteSessionCookie();
     window.localStorage.removeItem('casper-user-email');
-    window.localStorage.removeItem('casper-refresh-token');
   }
 
   /**
@@ -1376,13 +1309,6 @@ export class CasperSocket extends PolymerElement {
       window.localStorage.setItem('casper-user-email', email);
       this._savedEmail = email;
     }
-  }
-
-  /**
-   * Retrieve saved credential
-   */
-  get savedCredential () {
-    return window.localStorage.getItem('casper-refresh-token');
   }
 
   //***************************************************************************************//
