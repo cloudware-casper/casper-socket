@@ -485,7 +485,7 @@ export class CasperSocket extends PolymerElement {
           this.saveSessionCookie(response.access_token, response.access_ttl, response.issuer_url);
 
           // ... here we assume the caller will not reload the page, so the session must be updated ...
-          await this._setSessionAsync(response.access_token);
+          response = await this._setSessionAsync(response.access_token);
 
           // ... now that the session is validated save on local var to avoid a spurious kicking ...
           this._accessToken = response.access_token;
