@@ -485,19 +485,20 @@ export class CasperSocket extends PolymerElement {
           this.saveSessionCookie(response.access_token, response.access_ttl, response.issuer_url);
 
           // ... here we assume the caller will not reload the page, so the session must be updated ...
-          response = await this._setSessionAsync(response.access_token);
+          const sessionResponse = await this._setSessionAsync(response.access_token);
 
           // ... now that the session is validated save on local var to avoid a spurious kicking ...
           this._accessToken = response.access_token;
+          sessionResponse.url = response.url;
           this._dismissOverlay();
 
           // ... notify the application 
           this.dispatchEvent(new CustomEvent('casper-signed-in', {
             bubbles: true,
             composed: true,
-            detail: response
+            detail: sessionResponse
           }));
-          return response;
+          return sessionResponse;
       }
     } catch (e) {
       if (e.status_code == 504) {
