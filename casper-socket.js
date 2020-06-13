@@ -18,8 +18,6 @@
   -
  */
 
-import { PolymerElement } from '@polymer/polymer/polymer-element.js';
-
 /**
  * This promise wrapper can be resolved outside the caller scope, i.e. we can resolve from the
  * network code that decodes incoming messages
@@ -41,80 +39,70 @@ export class CasperSocketPromise {
   }
 }
 
-export class CasperSocket extends PolymerElement {
+export class CasperSocket extends HTMLElement {
 
-  static get is () {
-    return 'casper-socket';
+  /**************************************************************/
+  /*                  Setters and getters                       */
+  /**************************************************************/
+  
+  get secondary () {
+    return this._secondary;
   }
 
-  static get properties () {
-    return {
-      /** websocket schema + hostname (no port no path) */
-      url: {
-        type: String
-      },
-      /** websocket port number, defaults to current page port */
-      port: {
-        type: String
-      },
-      /** Path or route that connects to casper-epaper module */
-      path: {
-        type: String
-      },
-      /** Sec-WebSocket-Protocol */
-      webSocketProtocol: {
-        type: String,
-        value: 'casper-epaper'
-      },
-      /** Define to use cookies valid for all sub domains of this domain */
-      cookieDomain: {
-        type: String,
-        value: undefined
-      },
-      /** Default timeout for server requests in seconds */
-      defaultTimeout: {
-        type: Number,
-        value: 10
-      },
-      /** Time in seconds the web socket is kept open after the user becomes idle, must be less than sessionRenewTolerance */
-      userIdleTimeout: {
-        type: Number,
-        value: 180
-      },
-      /** Lower limit for session time to live, when the ttl gets bellow this the session will be extended */
-      sessionRenewTolerance: {
-        type: Number,
-        value: 3600
-      }
-    }
+  set secondary (isSecondary) {
+    this._secondary = true;
+  }
+
+  get userIdleTimeout () {
+    return this._userIdleTimeout;
+  }
+
+  set extraOptions (options) {
+    this._extraOptions = options;
   }
 
   /**
-   * @brief Assign defaults to undefined component attributes
+   * Connstructor assign defaults to undefined component attributes, grabs values from the elements attributes
    */
   constructor () {
     super();
-    if (this.url === undefined) {
-      if (window.location.protocol === 'https:') {
-        this.url = 'wss://' + window.location.hostname;
+    this._url = this.getAttribute('url');
+    if ( !this._url ) {
+      if ( window.location.protocol === 'https:' ) {
+        this._url = 'wss://' + window.location.hostname;
       } else {
-        this.url = 'ws://' + window.location.hostname;
+        this._url = 'ws://' + window.location.hostname;
       }
     }
-    this.port = this.port || window.location.port;
-    this.path = this.path || 'epaper';
-
-    if (this.cookieDomain === undefined) {
+    /* websocket port number, defaults to current page port */
+    this._port = this.getAttribute('port') || window.location.port;
+    /* Path or route that connects to casper-epaper module */
+    this._path = this.getAttribute('path') || 'epaper';
+    /* Default timeout for server requests in seconds */
+    this._defaultTimeout = parseInt(this.getAttribute('default-timeout') || '10');
+    /* Time in seconds the web socket is kept open after the user becomes idle, must be less than sessionRenewTolerance */
+    this._userIdleTimeout = parseInt(this.getAttribute('user-idle-timeout') || '180');
+    /* Lower limit for session time to live, when the ttl gets bellow this the session will be extended */
+    this._sessionRenewTolerance = parseInt(this.getAttribute('session-renew-tolerance') || '3600');
+    /* Define to use cookies valid for all sub domains of this domain */
+    this._cookieDomain = this.getAttribute('cookie-domain');
+    if ( !this._cookieDomain ) {
       let domain = window.location.hostname.split('.');
-      if (domain.length >= 3) {
+      if ( domain.length >= 3 ) {
         domain.shift();
       }
-      this.cookieDomain = domain.join('.');
+      this._cookieDomain = domain.join('.');
     }
+    /* Sec-WebSocket-Protocol */
+    this._webSocketProtocol = this.getAttribute('web-socket-protocol') || 'casper-epaper';
+    /* secondary if set the socket does not send events and will not listen to user activity */
+    this._secondary = this.hasAttribute('secondary');
 
-    this._boundMouseOutListener = this._mouseOutListener.bind(this);
-    this._boundUserActivity = this.userActivity.bind(this);
-    this._boundApplicationInactive = this.applicationInactive.bind(this);
+    if ( this._secondary === false ) {
+      this._boundMouseOutListener = this._mouseOutListener.bind(this);
+      this._boundUserActivity = this.userActivity.bind(this);
+      this._boundApplicationInactive = this.applicationInactive.bind(this);  
+    }
   }
 
   connectedCallback () {
@@ -122,10 +110,12 @@ export class CasperSocket extends PolymerElement {
     this._silentDisconnect = false;
     this._socket = undefined;
 
-    // ... install global listeners to detect user activity
-    document.addEventListener('mouseout', this._boundMouseOutListener);
-    document.addEventListener('keypress', this._boundUserActivity);
-    window.addEventListener('blur', this._boundApplicationInactive);
+    if ( this._secondary === false ) {
+      // ... install global listeners to detect user activity
+      document.addEventListener('mouseout', this._boundMouseOutListener);
+      document.addEventListener('keypress', this._boundUserActivity);
+      window.addEventListener('blur', this._boundApplicationInactive);
+    }
   }
 
   _mouseOutListener (event) {
@@ -138,22 +128,12 @@ export class CasperSocket extends PolymerElement {
     this._clearData();
     this.disconnect();
 
-    // ... cleanup global listeners
-    document.removeEventListener('mouseout', this._boundMouseOutListener);
-    document.removeEventListener('keypress', this._boundUserActivity);
-    window.removeEventListener('blur', this._boundApplicationInactive);
-  }
-
-  connect () {
-    this._ws_url = this.url + ((this.port != undefined && this.port !== '') ? ':' + this.port : '') + '/' + this.path;
-    if ( typeof MozWebSocket !== 'undefined' ) {
-      this._socket = new MozWebSocket(this._ws_url, this.webSocketProtocol);
-    } else {
-      this._socket = new WebSocket(this._ws_url, this.webSocketProtocol);
+    if ( this._secondary === false ) {
+      // ... cleanup global listeners
+      document.removeEventListener('mouseout', this._boundMouseOutListener);
+      document.removeEventListener('keypress', this._boundUserActivity);
+      window.removeEventListener('blur', this._boundApplicationInactive);
     }
-    this._socket.onmessage = this._onSocketMessage.bind(this);
-    this._socket.onopen = this._onSocketOpen.bind(this);
-    this._socket.onclose = this._onSocketClose.bind(this);
   }
 
   _connectAsync (url) {
@@ -162,12 +142,22 @@ export class CasperSocket extends PolymerElement {
       promise.reject('connect timeout');
     }, 3000);
     if ( typeof MozWebSocket !== 'undefined' ) {
-      this._socket = new MozWebSocket(url, this.webSocketProtocol);
+      this._socket = new MozWebSocket(url, this._webSocketProtocol);
     } else {
-      this._socket = new WebSocket(url, this.webSocketProtocol);
+      this._socket = new WebSocket(url, this._webSocketProtocol);
     }
     this._socket.onmessage = this._onSocketMessage.bind(this);
-    this._socket.onclose = this._onSocketClose.bind(this);
+    this._socket.onclose = () => {
+      if ( this._secondary === false ) {
+        if ( this._silentDisconnect !== true ) {
+          this.dispatchEvent(new CustomEvent('casper-disconnected', { bubbles: true, composed: true, detail: { message: '', icon: 'sleep' } }));
+        } else {
+          this.dispatchEvent(new CustomEvent('casper-disconnected', { bubbles: true, composed: true, detail: { silent: true } }));
+        }
+      }
+      this._silentDisconnect = false;
+      this._socket = undefined;
+    };
     this._socket.onopen = () => {
       clearTimeout(tid); 
       promise.resolve(true);   
@@ -176,11 +166,13 @@ export class CasperSocket extends PolymerElement {
   }
 
   /**
-   * Terminate connection to casper server
+   * Terminate connection to the casper server
    */
   disconnect () {
     this._clearData();
-    if (this._socket) {
+    clearTimeout(this._idleTimerId);
+    this._idleTimerId = undefined;
+    if ( this._socket ) {
       this._socket.close();
       this._socket = undefined;
     }
@@ -194,7 +186,7 @@ export class CasperSocket extends PolymerElement {
     }
   }
 
-  submitJob (job, handler, options) {
+  async submitJob (job, handler, options) {
     let timeout;
 
     // .. set all keys that will be automatically replaced with session values
@@ -212,8 +204,8 @@ export class CasperSocket extends PolymerElement {
       job['ttr'] = options.ttr;
     }
 
-    if (this.extraOptions !== undefined) {
-      this.extraOptions.forEach((elem) => {
+    if (this._extraOptions !== undefined) {
+      this._extraOptions.forEach((elem) => {
         job[elem.key] = elem.value;
       });
     }
@@ -231,11 +223,14 @@ export class CasperSocket extends PolymerElement {
         this._showOverlay(options.overlay);
       }
     }
-    timeout = timeout || this.defaultTimeout;
+    timeout = timeout || this._defaultTimeout;
     let ivk = this._selectInvokeId();
     let tid = setTimeout(() => this._timeoutHandler(ivk), timeout * 1000);
     let request = { job: job, callback: this._submitJobResponse.bind(this), options: options, handler: handler, invokeId: ivk, timer: tid };
-    this._send(ivk + ':PUT:' + JSON.stringify(target) + ':' + JSON.stringify(job));
+    if ( this._socket === undefined ) {
+      await this._setSessionAsync(this.sessionCookie);
+    }
+    this._socket.send(ivk + ':PUT:' + JSON.stringify(target) + ':' + JSON.stringify(job));
     this._activeRequests.set(ivk, request);
   }
 
@@ -259,13 +254,16 @@ export class CasperSocket extends PolymerElement {
     }
   }
 
-  subscribeJob (jobId, handler, timeout) {
+  async subscribeJob (jobId, handler, timeout) {
     let p = jobId.split(':');
-    timeout = timeout || this.defaultTimeout;
+    timeout = timeout || this._defaultTimeout;
     let ivk = this._selectInvokeId();
     let tid = setTimeout(() => this._timeoutHandler(ivk), timeout * 1000);
     let request = { tube: p[0], id: p[1], callback: this._subscribeJobResponse.bind(this), handler: handler, invokeId: ivk, timer: tid };
-    this._send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'job', tube: request.tube, id: request.id }));
+    if ( this._socket === undefined ) {
+      await this._setSessionAsync(this.sessionCookie);
+    }
+    this._socket.send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'job', tube: request.tube, id: request.id }));
     this._activeRequests.set(ivk, request);
   }
 
@@ -287,17 +285,20 @@ export class CasperSocket extends PolymerElement {
     }
   }
 
-  cancelJob (jobChannel, callback) {
+  async cancelJob (jobChannel, callback) {
     let subscription = this._subscriptions.get(jobChannel);
     if (subscription) {
       clearTimeout(subscription.timer);
       this._subscriptions.delete(jobChannel);
     }
     let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+    let tid = setTimeout(() => this._timeoutHandler(ivk), this._defaultTimeout * 1000);
     let p = jobChannel.split(':');
     let request = { tube: p[0], id: p[1], callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':CANCEL:' + JSON.stringify({ target: 'job-queue', tube: request.tube, id: parseInt(request.id), status: 'cancelled' }));
+    if ( this._socket === undefined ) {
+      await this._setSessionAsync(this.sessionCookie);
+    }
+    this._socket.send(ivk + ':CANCEL:' + JSON.stringify({ target: 'job-queue', tube: request.tube, id: parseInt(request.id), status: 'cancelled' }));
     this._activeRequests.set(ivk, request);
   }
 
@@ -323,12 +324,19 @@ export class CasperSocket extends PolymerElement {
     const tid = setTimeout(() => {
       promise.reject('disconnect timeout');
     }, 3000);
-    this._socket.onclose = () => { promise.resolve(true); clearTimeout(tid); this._socket = undefined; };
+    this._socket.onclose = () => { 
+      promise.resolve(true); 
+      clearTimeout(tid); 
+      this._socket = undefined; 
+    };
     this._socket.close();
     return promise;
   }
 
   async _setSessionAsync (accessToken) {
+    if ( this._socket === undefined ) {
+      await this._connectAsync(this._url + ((this._port != undefined && this._port !== '') ? ':' + this._port : '') + '/' + this._path);
+    }
     return this._sendAsync(false, 'SET', { target: 'session' }, { access_token: accessToken });
   }
 
@@ -582,7 +590,7 @@ export class CasperSocket extends PolymerElement {
     return this._sendAsync(true, 'SET', { target: 'document', id: id }, params, -1);
   }
 
-  sendClick (id, x, y, callback) {
+  sendClick (id, x, y) {
     return this._sendAsync(true, 'SET', { target: 'document', id: id }, { input: { click: { x: x, y: y } } });
   }
 
@@ -621,22 +629,25 @@ export class CasperSocket extends PolymerElement {
     return this._sendAsync(true, 'REMOVE', { target: 'document', id: id }, { band: { type: type, id: bandId } });
   }
 
-  setListValue (id, value, callback) {
+  async setListValue (id, value, callback) {
     const ivk = this._selectInvokeId();
-    const tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+    const tid = setTimeout(() => this._timeoutHandler(ivk), this._defaultTimeout * 1000);
     const options = { target: "document", id: id };
     const command = { input: { text: value, key: 'save' } };
     const request = { callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
+    if ( this._socket === undefined ) {
+      await this._setSessionAsync(this.sessionCookie);
+    }
+    this._socket.send(ivk + ':SET:' + JSON.stringify(options) + ':' + JSON.stringify(command));
     this._activeRequests.set(ivk, request);
     this.userActivity();
   }
 
   /*** NOTFICATION STUFF **/
 
-  getNotifications (channel, callback) {
+  async getNotifications (channel, callback) {
     const ivk = this._selectInvokeId();
-    const tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+    const tid = setTimeout(() => this._timeoutHandler(ivk), this._defaultTimeout * 1000);
     const request = {
       invokeId: ivk, timer: tid, callback: function (response) {
         try {
@@ -651,7 +662,10 @@ export class CasperSocket extends PolymerElement {
       }.bind(this)
     };
     const options = { target: 'notifications', channel: channel };
-    this._send(ivk + ':GET:' + JSON.stringify(options));
+    if ( this._socket === undefined ) {
+      await this._setSessionAsync(this.sessionCookie);
+    }
+    this._socket.send(ivk + ':GET:' + JSON.stringify(options));
     this._activeRequests.set(ivk, request);
   }
 
@@ -678,12 +692,15 @@ export class CasperSocket extends PolymerElement {
    * @param {String} id      optional entity identifier
    * @param {Object} handler functions that is called when the server pushes a notification
    */
-  _subscribeNotifications (channel, id, handler) {
+  async _subscribeNotifications (channel, id, handler) {
     const ivk = this._selectInvokeId();
     const chn = channel + ':' + id;
-    const tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
+    const tid = setTimeout(() => this._timeoutHandler(ivk), this._defaultTimeout * 1000);
     const request = { callback: this._subscribeNotificationsResponse.bind(this), channel: chn, handler: handler, timer: tid, invokeId: ivk };
-    this._send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id }));
+    if ( this._socket === undefined ) {
+      await this._setSessionAsync(this.sessionCookie);
+    }
+    this._socket.send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id }));
     this._activeRequests.set(ivk, request);
     this._subscriptions.set(chn, { handler: handler, timer: tid, invokeId: ivk, confirmed: false, notification: true });
   }
@@ -712,21 +729,19 @@ export class CasperSocket extends PolymerElement {
   }
 
   _unsubscribeNotifications (channel, id) {
-    let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), this.defaultTimeout * 1000);
-    let request = { timer: tid, invokeId: ivk };
-    this._send(ivk + ':UNSUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id }));
-    this._activeRequests.set(ivk, request);
+    return this._sendAsync(false, 'UNSUBSCRIBE', { target: 'notifications', channel: channel, id: id });
   }
 
-  getData (urn, timeout, callback) {
+  async getData (urn, timeout, callback) {
     let ivk = this._selectInvokeId();
-    let tid = setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000);
+    let tid = setTimeout(() => this._timeoutHandler(ivk), (timeout || this._defaultTimeout) * 1000);
     let options = { target: "jsonapi", urn: urn };
     let request = { callback: callback, timer: tid, invokeId: ivk };
-    this._send(ivk + ':GET:' + JSON.stringify(options));
+    if ( this._socket === undefined ) {
+      await this._setSessionAsync(this.sessionCookie);
+    }
+    this._socket.send(ivk + ':GET:' + JSON.stringify(options));
     this._activeRequests.set(ivk, request);
-
     return ivk;
   }
 
@@ -745,7 +760,7 @@ export class CasperSocket extends PolymerElement {
    * @param {Number} timeout in seconds
    */
   _http_upstream (verb, url, body, timeout) {
-    return this._sendAsync(false, verb, { target: 'http', url: url, headers: { 'content-type': 'application/json', 'accept': 'application/json' } }, body, timeout);
+    return this._sendAsync(this._secondary, verb, { target: 'http', url: url, headers: { 'content-type': 'application/json', 'accept': 'application/json' } }, body, timeout);
   }
 
   /**
@@ -757,34 +772,23 @@ export class CasperSocket extends PolymerElement {
    * @param {Object} params the command parameters
    * @param {Number} timeout in seconds (use -1 to disable)
    */
-  _sendAsync (isUserActivity, verb, options, params, timeout) {
+  async _sendAsync (isUserActivity, verb, options, params, timeout) {
     const ivk = this._selectInvokeId();
-    const tid = timeout == -1 ? undefined : (setTimeout(() => this._timeoutHandler(ivk), (timeout || this.defaultTimeout) * 1000));
+    const tid = timeout == -1 ? undefined : (setTimeout(() => this._timeoutHandler(ivk), (timeout || this._defaultTimeout) * 1000));
     const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
     this._activeRequests.set(ivk, { promise: promise, timer: tid, invokeId: ivk, jsonapi: options.jsonapi });
     if (isUserActivity) {
       this.userActivity();
     }
+    if ( this._socket === undefined ) {
+      await this._setSessionAsync(this.sessionCookie);
+    }
     if (params !== undefined) {
-      this._send(`${ivk}:${verb}:${JSON.stringify(options)}:${JSON.stringify(params)}`);
+      this._socket.send(`${ivk}:${verb}:${JSON.stringify(options)}:${JSON.stringify(params)}`);
     } else {
-      this._send(`${ivk}:${verb}:${JSON.stringify(options)}`);
+      this._socket.send(`${ivk}:${verb}:${JSON.stringify(options)}`);
     }
     return promise;
-  }
-
-  /**
-   * Send text message to casper server
-   *
-   * @param {String} message the plain text message to send
-   */
-  _send (message) {
-    if (this._socket === undefined || this._socket.readyState !== 1) {
-      this._pendingCommands.push(message);
-      this.connect();
-    } else if (this._socket.readyState === 1) {
-      this._socket.send(message);
-    }
   }
 
   /**
@@ -802,28 +806,8 @@ export class CasperSocket extends PolymerElement {
     if (!isNaN(invoke)) {
       this._freedInvokes.push(invoke);
     } else {
-      debugger;
+      console.error('invalid invoke id');
     }
-  }
-
-  _onSocketOpen (event) {
-    if (this._pendingCommands.length !== 0) {
-      for (let message of this._pendingCommands) {
-        this._socket.send(message);
-      }
-      this._pendingCommands = [];
-    }
-    this.dispatchEvent(new CustomEvent('casper-connected', { bubbles: true, composed: true }));
-  }
-
-  _onSocketClose (event) {
-    if (this._silentDisconnect !== true) {
-      this.dispatchEvent(new CustomEvent('casper-disconnected', { bubbles: true, composed: true, detail: { message: '', icon: 'sleep' } }));
-    } else {
-      this.dispatchEvent(new CustomEvent('casper-disconnected', { bubbles: true, composed: true, detail: { silent: true } }));
-    }
-    this._silentDisconnect = false;
-    this._socket = undefined;
   }
 
   /**
@@ -1058,16 +1042,15 @@ export class CasperSocket extends PolymerElement {
    * Initializes internal data structures
    */
   _initData (clearSubs) {
-    this._savedEmail = undefined;  // The email used to sign-in
-    this._accessToken = undefined;  // The current access token in use
-    this._accessValidity = undefined;  // Last second of session validity in EPOCH (approximation)
-    this._pendingCommands = [];         // Commands waiting for session establishment
-    this._freedInvokes = [];         // keeps the invokes that were returned by the server
-    this._activeRequests = new Map();  // hash, key is the Invoke value the request in flight
+    this._savedEmail = undefined;       // The email used to sign-in
+    this._accessToken = undefined;      // The current access token in use
+    this._accessValidity = undefined;   // Last second of session validity in EPOCH (approximation)
+    this._freedInvokes = [];            // keeps the invokes that were returned by the server
+    this._activeRequests = new Map();   // hash, key is the Invoke value the request in flight
     this._documents = new Map();
-    this._nextInvokeId = 1;          // The next fresh invoke ID
+    this._nextInvokeId = 1;             // The next fresh invoke ID
     if (this._subscriptions === undefined || clearSubs === true) {
-      this._subscriptions = new Map();      // Registry of server subscriptions, key is channel
+      this._subscriptions = new Map();  // Registry of server subscriptions, key is channel
     }
     this._applicationInactive = false;
   }
@@ -1078,22 +1061,26 @@ export class CasperSocket extends PolymerElement {
    * @param {Object} detail
    */
   _showOverlay (detail) {
-    this.dispatchEvent(new CustomEvent('casper-show-overlay', {
-      bubbles: true,
-      composed: true,
-      detail: detail
-    })
-    );
+    if ( this._secondary === false ) {
+      this.dispatchEvent(new CustomEvent('casper-show-overlay', {
+          bubbles: true,
+          composed: true,
+          detail: detail
+        })
+      );
+    }
   }
 
   /**
    * Helper to dismiss the overlay that blocks the user interface
    */
   _dismissOverlay () {
-    this.dispatchEvent(new CustomEvent('casper-dismiss-overlay', {
-      bubbles: true,
-      composed: true
-    }));
+    if ( this._secondary === false ) {
+      this.dispatchEvent(new CustomEvent('casper-dismiss-overlay', {
+        bubbles: true,
+        composed: true
+      }));
+    }
   }
 
   /**
@@ -1102,17 +1089,17 @@ export class CasperSocket extends PolymerElement {
    * @param {Object} The event created by user activity (ignored)
    */
   async userActivity (event) {
-    if (this._applicationInactive === true) {
+    if ( this._applicationInactive === true ) {
       this._applicationInactive = false;
       this.checkIfSessionChanged();
     }
     this._startIdleTimer();
-    if ( this._accessValidity !== undefined ) {
+    if ( this._accessValidity !== undefined && this._secondary === false ) {
       const now = new Date().valueOf() / 1000;
       if (true) {
         console.log('TTL is ~', this._accessValidity - now);
       }
-      if (this._accessValidity - now < this.sessionRenewTolerance) {
+      if ( this._accessToken && (this._accessValidity - now < this._sessionRenewTolerance) ) {
         try {
           const response = await this._extendSessionAsync(3000);
           if ( response.success === true ) {
@@ -1126,6 +1113,18 @@ export class CasperSocket extends PolymerElement {
           console.log('NEW TTL is ~', this._accessValidity - now);
         }
       }
+    }
+  }
+
+  /**
+   * Sends a session extend command just to prevent the server from closing the socket due to inactivity
+   * 
+   * @note we don't touch the cookie 
+   */
+  async keepAlive () {
+    const response = await this._extendSessionAsync(3000);
+    if ( response.success === true ) {
+      this._startIdleTimer();
     }
   }
 
@@ -1145,7 +1144,7 @@ export class CasperSocket extends PolymerElement {
    */
   _startIdleTimer () {
     clearTimeout(this._idleTimerId);
-    this._idleTimerId = setTimeout(e => this._userIdleTimeout(e), this.userIdleTimeout * 1000);
+    this._idleTimerId = setTimeout(e => this._userIdleTimeoutHandler(e), this._userIdleTimeout * 1000);
   }
 
   /**
@@ -1153,25 +1152,33 @@ export class CasperSocket extends PolymerElement {
    *
    * @note Suspension is prevented when a wizard is opened or generally speaking a server job is pending
    */
-  async _userIdleTimeout (event) {
-    for (let subscription of this._subscriptions.values()) {
-      if (subscription.confirmed === true && subscription.job === true) {
-        console.warn('refusing to go idle because at least one job subscription is active');
-        return;
+  async _userIdleTimeoutHandler (event) {
+    if ( this._secondary === false ) {
+      for (let subscription of this._subscriptions.values()) {
+        if (subscription.confirmed === true && subscription.job === true) {
+          console.warn('refusing to go idle because at least one job subscription is active');
+          return;
+        }
       }
-    }
-    try {
-      const response = await this._extendSessionAsync(3000);
-      if ( response.success === true ) {
-        this.saveSessionCookie(this._accessToken, response.ttl - 30, this.issuerUrl);
-      }
-    } catch (e) {
-      console.log(e);
-    } finally {
+      try {
+        if ( this._accessToken ) {
+          const response = await this._extendSessionAsync(3000);
+          if ( response.success === true ) {
+            this.saveSessionCookie(this._accessToken, response.ttl - 30, this.issuerUrl);
+          }
+        }
+      } catch (e) {
+        console.log(e);
+      } finally {
+        this._applicationInactive = true;
+        this._showOverlay({ message: 'Sessão suspensa por inatividade', icon: 'cloud', opacity: 0.15 });
+        this._silentDisconnect = true;
+        this.disconnect();  
+      }  
+    } else {
       this._applicationInactive = true;
-      this._showOverlay({ message: 'Sessão suspensa por inatividade', icon: 'cloud', opacity: 0.15 });
       this._silentDisconnect = true;
-      this.disconnect();  
+      this.disconnect();
     }
   }
 
@@ -1182,10 +1189,12 @@ export class CasperSocket extends PolymerElement {
    *       so the only safe action is to reload the page and start fresh with new session
    */
   checkIfSessionChanged () {
-    if (this._accessToken !== undefined && this._accessToken !== this.sessionCookie) {
-      window.location.reload();
-    } else {
-      this._startIdleTimer();
+    if ( this._secondary === false ) {
+      if (this._accessToken !== undefined && this._accessToken !== this.sessionCookie) {
+        window.location.reload();
+      } else {
+        this._startIdleTimer();
+      }
     }
   }
 
@@ -1208,8 +1217,8 @@ export class CasperSocket extends PolymerElement {
     if (window.location.protocol === 'https:') {
       cookie += ';secure=true';
     }
-    if (this.cookieDomain) {
-      cookie += `;domain=${this.cookieDomain}`;
+    if (this._cookieDomain) {
+      cookie += `;domain=${this._cookieDomain}`;
     }
     if (ttl) {
       let now = new Date();
@@ -1227,8 +1236,8 @@ export class CasperSocket extends PolymerElement {
    */
   deleteCookie (name) {
     let cookie = `${name}=`;
-    if (this.cookieDomain) {
-      cookie += `;domain=${this.cookieDomain}`;
+    if (this._cookieDomain) {
+      cookie += `;domain=${this._cookieDomain}`;
     }
     cookie += ';path=/;expires=Thu, 01 Jan 2018 00:00:01 GMT;'
     document.cookie = cookie;
@@ -1364,20 +1373,20 @@ export class CasperSocket extends PolymerElement {
   }
 
   jget (urn, timeout) {
-    return this._sendAsync(false, 'GET', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
+    return this._sendAsync(this._secondary, 'GET', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
   }
 
   jpost (urn, body, timeout) {
-    return this._sendAsync(false, 'POST', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
+    return this._sendAsync(this._secondary, 'POST', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
   }
 
   jpatch (urn, body, timeout) {
-    return this._sendAsync(false, 'PATCH', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
+    return this._sendAsync(this._secondary, 'PATCH', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
   }
 
   jdelete (urn, timeout) {
-    return this._sendAsync(false, 'DELETE', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
+    return this._sendAsync(this._secondary, 'DELETE', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
   }
 }
 
-window.customElements.define(CasperSocket.is, CasperSocket);
+window.customElements.define('casper-socket', CasperSocket);
