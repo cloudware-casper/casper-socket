@@ -890,9 +890,18 @@ export class CasperSocket extends HTMLElement {
               if (request.jsonapi === true) {
                 if (payload.errors === undefined) {
                   if (payload.data instanceof Array) {
-                    payload.data.forEach((element, index, array) => { element.attributes.id = element.id; array[index] = element.attributes; });
+                    payload.data.forEach((element, index, array) => { 
+                      element.attributes.id = element.id; 
+                      if ( element.relationships ) {
+                        element.attributes.relationships = element.relationships;
+                      }
+                      array[index] = element.attributes; 
+                    });
                   } else {
                     payload.data.attributes.id = payload.data.id;
+                    if ( payload.data.relationships ) {
+                      payload.data.attributes.relationships = payload.data.relationships;
+                    }
                     payload.data = payload.data.attributes;
                   }
                 } else {
