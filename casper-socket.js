@@ -1032,18 +1032,24 @@ export class CasperSocket extends HTMLElement {
    * Clears timers and internal data
    */
   _clearData () {
-    for (let request of this._activeRequests.values()) {
-      if (request.timer) {
-        clearTimeout(request.timer);
+    if ( this._activeRequests ) {
+      for (let request of this._activeRequests.values()) {
+        if (request.timer) {
+          clearTimeout(request.timer);
+        }
       }
+      this._activeRequests.clear();
     }
-    this._activeRequests.clear();
-    this._documents.clear();
-    this._subscriptions.forEach(function (subscription, channel, subs) {
-      if (!(subscription.notification && subscription.confirmed)) {
-        subs.delete(channel);
-      }
-    });
+    if ( this._documents) {
+      this._documents.clear();
+    }
+    if ( this._subscriptions ) {
+      this._subscriptions.forEach(function (subscription, channel, subs) {
+        if (!(subscription.notification && subscription.confirmed)) {
+          subs.delete(channel);
+        }
+      });
+    }
     this._initData(false);
   }
 
