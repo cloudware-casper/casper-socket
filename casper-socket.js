@@ -1032,7 +1032,7 @@ export class CasperSocket extends HTMLElement {
    * Clears timers and internal data
    */
   _clearData () {
-    if ( this._activeRequests ) {
+    if (this._activeRequests) {
       for (let request of this._activeRequests.values()) {
         if (request.timer) {
           clearTimeout(request.timer);
@@ -1040,10 +1040,10 @@ export class CasperSocket extends HTMLElement {
       }
       this._activeRequests.clear();
     }
-    if ( this._documents) {
+    if (this._documents) {
       this._documents.clear();
     }
-    if ( this._subscriptions ) {
+    if (this._subscriptions) {
       this._subscriptions.forEach(function (subscription, channel, subs) {
         if (!(subscription.notification && subscription.confirmed)) {
           subs.delete(channel);
@@ -1203,10 +1203,10 @@ export class CasperSocket extends HTMLElement {
    * @param {String} urn The urn that will be filtered.
    */
   _escapeUrn (urn) {
-    const [_, urnFreeFilter] = urn.match(/filter="(.*)"/);
-    if (!urnFreeFilter) return urn;
+    const freeFilter = urn.match(/filter="(.*)"/);
+    if (!freeFilter) return urn;
 
-    return urn.replace(urnFreeFilter, encodeURIComponent(urnFreeFilter).replace(/'/g, '%27'));
+    return urn.replace(freeFilter[1], encodeURIComponent(freeFilter[1]).replace(/'/g, '%27'));
   }
 
   /**
