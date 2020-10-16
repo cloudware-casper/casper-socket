@@ -1,7 +1,7 @@
 {
   "description": "Websocket client for casper server",
   "name": "@cloudware-casper/casper-socket",
-  "version": "5.2.1",
+  "version": "5.2.2",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
