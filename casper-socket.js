@@ -831,7 +831,7 @@ export class CasperSocket extends HTMLElement {
           if (subscription) {
             timerId = subscription.timer;
             if (timerId) {
-              if (notification.status !== 'in-progress') {
+              if ( !['in-progress', 'reset'].includes(notification.status) ) {
 
                 let request = this._activeRequests.get(subscription.invokeId);
                 if (request) {
