@@ -795,7 +795,7 @@ export class CasperSocket extends HTMLElement {
    * Assigns the next invoke id for communication with the server
    */
   _selectInvokeId () {
-    if (this._freedInvokes.length === 0) {
+    if (!this._freedInvokes || this._freedInvokes.length === 0) {
       return this._nextInvokeId++;
     } else {
       return this._freedInvokes.shift();
