@@ -1198,18 +1198,6 @@ export class CasperSocket extends HTMLElement {
   }
 
   /**
-   * This method will escape the ampersand and single quote characters from the urn before dispatching the request to the JSON API.
-   *
-   * @param {String} urn The urn that will be filtered.
-   */
-  _escapeUrn (urn) {
-    const freeFilter = urn.match(/filter="(.*)"/);
-    if (!freeFilter) return urn;
-
-    return urn.replace(freeFilter[1], encodeURIComponent(freeFilter[1]).replace(/'/g, '%27'));
-  }
-
-  /**
    * If the session in memory is not same we have saved in the cookie it means another browser window/tab changed it
    *
    * @note This could mean the user changed the login account or selected another entity,
@@ -1400,19 +1388,19 @@ export class CasperSocket extends HTMLElement {
   }
 
   jget (urn, timeout) {
-    return this._sendAsync(this._secondary, 'GET', { target: 'jsonapi', urn: this._escapeUrn(urn), jsonapi: true }, undefined, timeout);
+    return this._sendAsync(this._secondary, 'GET', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
   }
 
   jpost (urn, body, timeout) {
-    return this._sendAsync(this._secondary, 'POST', { target: 'jsonapi', urn: this._escapeUrn(urn), jsonapi: true }, body, timeout);
+    return this._sendAsync(this._secondary, 'POST', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
   }
 
   jpatch (urn, body, timeout) {
-    return this._sendAsync(this._secondary, 'PATCH', { target: 'jsonapi', urn: this._escapeUrn(urn), jsonapi: true }, body, timeout);
+    return this._sendAsync(this._secondary, 'PATCH', { target: 'jsonapi', urn: urn, jsonapi: true }, body, timeout);
   }
 
   jdelete (urn, timeout) {
-    return this._sendAsync(this._secondary, 'DELETE', { target: 'jsonapi', urn: this._escapeUrn(urn), jsonapi: true }, undefined, timeout);
+    return this._sendAsync(this._secondary, 'DELETE', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
   }
 }
 
