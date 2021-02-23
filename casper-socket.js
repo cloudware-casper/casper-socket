@@ -140,7 +140,7 @@ export class CasperSocket extends HTMLElement {
     const promise = new CasperSocketPromise((resolve, reject) => { /* empty handler */ });
     const tid = setTimeout(() => {
       promise.reject('connect timeout');
-    }, 3000);
+    }, 6000);
     if (typeof MozWebSocket !== 'undefined') {
       this._socket = new MozWebSocket(url, this._webSocketProtocol);
     } else {
