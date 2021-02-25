@@ -49,8 +49,16 @@ export class CasperSocket extends HTMLElement {
     return this._secondary;
   }
 
+  static get useLocalStorage () {
+    return window.localStorage.getItem('casper_use_local_storage') == 'true';
+  }
+
   set secondary (isSecondary) {
     this._secondary = true;
+  }
+
+  static set useLocalStorage (useLocalStorage) {
+    window.localStorage.setItem('casper_use_local_storage', useLocalStorage ? 'true' : 'false');
   }
 
   get userIdleTimeout () {
@@ -1227,21 +1235,25 @@ export class CasperSocket extends HTMLElement {
    * @param {Number} ttl    time to live in seconds
    */
   saveCookie (name, value, ttl) {
-    let cookie = `${name}=${value};path=/`;
+    if ( CasperSocket.useLocalStorage ) {
+      window.localStorage.setItem(name, value);
+    } else {
+      let cookie = `${name}=${value};path=/`;
 
-    if (window.location.protocol === 'https:') {
-      cookie += ';secure=true';
+      if (window.location.protocol === 'https:') {
+        cookie += ';secure=true';
+      }
+      if (this._cookieDomain) {
+        cookie += `;domain=${this._cookieDomain}`;
+      }
+      if (ttl) {
+        let now = new Date();
+        now.setSeconds(now.getSeconds() + ttl);
+        cookie += `;expires=${now.toUTCString()}`
+      }
+      cookie += ';';
+      document.cookie = cookie;  
     }
-    if (this._cookieDomain) {
-      cookie += `;domain=${this._cookieDomain}`;
-    }
-    if (ttl) {
-      let now = new Date();
-      now.setSeconds(now.getSeconds() + ttl);
-      cookie += `;expires=${now.toUTCString()}`
-    }
-    cookie += ';';
-    document.cookie = cookie;
   }
 
   /**
@@ -1250,12 +1262,16 @@ export class CasperSocket extends HTMLElement {
    * @param {String} name   cookie name
    */
   deleteCookie (name) {
-    let cookie = `${name}=`;
-    if (this._cookieDomain) {
-      cookie += `;domain=${this._cookieDomain}`;
+    if ( CasperSocket.useLocalStorage ) {
+      window.localStorage.removeItem(name);
+    } else {
+      let cookie = `${name}=`;
+      if (this._cookieDomain) {
+        cookie += `;domain=${this._cookieDomain}`;
+      }
+      cookie += ';path=/;expires=Thu, 01 Jan 2018 00:00:01 GMT;'
+      document.cookie = cookie;  
     }
-    cookie += ';path=/;expires=Thu, 01 Jan 2018 00:00:01 GMT;'
-    document.cookie = cookie;
   }
 
   /**
@@ -1297,25 +1313,29 @@ export class CasperSocket extends HTMLElement {
    * @return cookie value or undefined if the cookie does not exist or it's too short
    */
   static readCookie (cookie, minLength) {
-    let value;
-    let jar = document.cookie;
-    let start = jar.indexOf(cookie + '=');
-
-    if (start === -1) {
-      return undefined;
+    if ( CasperSocket.useLocalStorage ) {
+      return window.localStorage.getItem(cookie);
     } else {
-      start += cookie.length + 1;
-    }
-    let end = jar.indexOf(';', start);
-    if (end === -1) {
-      value = jar.substring(start, jar.length);
-    } else {
-      value = jar.substring(start, end);
-    }
-    if (minLength === undefined) {
-      return value;
-    } else {
-      return value.length >= minLength ? value : undefined;
+      let value;
+      let jar = document.cookie;
+      let start = jar.indexOf(cookie + '=');
+  
+      if (start === -1) {
+        return undefined;
+      } else {
+        start += cookie.length + 1;
+      }
+      let end = jar.indexOf(';', start);
+      if (end === -1) {
+        value = jar.substring(start, jar.length);
+      } else {
+        value = jar.substring(start, end);
+      }
+      if (minLength === undefined) {
+        return value;
+      } else {
+        return value.length >= minLength ? value : undefined;
+      }  
     }
   }
 
