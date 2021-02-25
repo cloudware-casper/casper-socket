@@ -50,15 +50,15 @@ export class CasperSocket extends HTMLElement {
   }
 
   static get useLocalStorage () {
-    return window.localStorage.getItem('casper_use_local_storage') == 'true';
+    return CasperSocket._useLocalStorage === true;
   }
 
   set secondary (isSecondary) {
     this._secondary = true;
   }
 
-  static set useLocalStorage (useLocalStorage) {
-    window.localStorage.setItem('casper_use_local_storage', useLocalStorage ? 'true' : 'false');
+  set useLocalStorage (useLocalStorage) {
+    CasperSocket._useLocalStorage = useLocalStorage;
   }
 
   get userIdleTimeout () {
