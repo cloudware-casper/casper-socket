@@ -1252,7 +1252,7 @@ export class CasperSocket extends HTMLElement {
         cookie += `;expires=${now.toUTCString()}`
       }
       cookie += ';';
-      document.cookie = cookie;  
+      document.cookie = cookie;
     }
   }
 
@@ -1270,7 +1270,7 @@ export class CasperSocket extends HTMLElement {
         cookie += `;domain=${this._cookieDomain}`;
       }
       cookie += ';path=/;expires=Thu, 01 Jan 2018 00:00:01 GMT;'
-      document.cookie = cookie;  
+      document.cookie = cookie;
     }
   }
 
@@ -1319,7 +1319,7 @@ export class CasperSocket extends HTMLElement {
       let value;
       let jar = document.cookie;
       let start = jar.indexOf(cookie + '=');
-  
+
       if (start === -1) {
         return undefined;
       } else {
@@ -1335,7 +1335,7 @@ export class CasperSocket extends HTMLElement {
         return value;
       } else {
         return value.length >= minLength ? value : undefined;
-      }  
+      }
     }
   }
 
@@ -1421,6 +1421,55 @@ export class CasperSocket extends HTMLElement {
 
   jdelete (urn, timeout) {
     return this._sendAsync(this._secondary, 'DELETE', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
+  }
+
+  subscribeTreeLazyload (urn, data, timeout) {
+    const options = { target: 'lazyload',
+                      urn: urn,
+                      is_tree: true,
+                      parent_column: data.parentColumn,
+                      id_column: data.idColumn,
+                      table_type: data.tableType,
+                      table_name: data.tableName };
+    return this._sendAsync(this._secondary, 'SUBSCRIBE', options, undefined, timeout);
+  }
+
+  subscribeLazyload (urn, data, timeout) {
+    const options = { target: 'lazyload',
+                      urn: urn,
+                      id_column: data.idColumn,
+                      parent_column: data.parentColumn };
+
+    return this._sendAsync(this._secondary, 'SUBSCRIBE', options, undefined, timeout);
+  }
+
+  unsubscribeLazyload (urn, timeout) {
+    return this._sendAsync(this._secondary, 'UNSUBSCRIBE', { target: 'lazyload', urn: urn }, undefined, timeout);
+  }
+
+  unsubscribeAllLazyload (timeout) {
+    console.log('Clearing all the socket lazyload subscriptions');
+    return this._sendAsync(this._secondary, 'UNSUBSCRIBE', { target: 'lazyload' }, undefined, timeout);
+  }
+
+  expandLazyload (urn, parentId, timeout) {
+    return this._sendAsync(this._secondary, 'GET', { target: 'lazyload', urn: urn, active_id: parentId, action: 'expand' }, undefined, timeout);
+  }
+
+  collapseLazyload (urn, parentId, timeout) {
+    return this._sendAsync(this._secondary, 'GET', { target: 'lazyload', urn: urn, active_id: parentId, action: 'collapse' }, undefined, timeout);
+  }
+
+  getLazyload (urn, data, timeout,) {
+    const options = { target: 'lazyload',
+                      urn: urn,
+                      id_column: data.idColumn,
+                      active_id: data.activeId,
+                      direction: data.direction,
+                      action: 'fetch',
+                      jsonapi: true };
+
+    return this._sendAsync(this._secondary, 'GET', options, undefined, timeout);
   }
 }
 
