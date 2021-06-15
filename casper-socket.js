@@ -1434,11 +1434,10 @@ export class CasperSocket extends HTMLElement {
     return this._sendAsync(this._secondary, 'SUBSCRIBE', options, undefined, timeout);
   }
 
-  subscribeLazyload (urn, data, timeout) {
+  subscribeLazyload (urn, parentColumn, timeout) {
     const options = { target: 'lazyload',
                       urn: urn,
-                      id_column: data.idColumn,
-                      parent_column: data.parentColumn };
+                      parent_column: parentColumn };
 
     return this._sendAsync(this._secondary, 'SUBSCRIBE', options, undefined, timeout);
   }
