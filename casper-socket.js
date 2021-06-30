@@ -1466,6 +1466,8 @@ export class CasperSocket extends HTMLElement {
                       active_id: data.activeId,
                       direction: data.direction,
                       action: 'fetch',
+                      nr_of_items: data.nrOfItems,
+                      active_index: data.activeIndex,
                       jsonapi: true };
 
     return this._sendAsync(this._secondary, 'GET', options, undefined, timeout);
