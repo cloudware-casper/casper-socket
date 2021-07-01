@@ -1423,21 +1423,13 @@ export class CasperSocket extends HTMLElement {
     return this._sendAsync(this._secondary, 'DELETE', { target: 'jsonapi', urn: urn, jsonapi: true }, undefined, timeout);
   }
 
-  subscribeTreeLazyload (urn, data, timeout) {
+  subscribeLazyload (urn, data, timeout) {
     const options = { target: 'lazyload',
                       urn: urn,
-                      is_tree: true,
                       parent_column: data.parentColumn,
                       id_column: data.idColumn,
                       table_type: data.tableType,
                       table_name: data.tableName };
-    return this._sendAsync(this._secondary, 'SUBSCRIBE', options, undefined, timeout);
-  }
-
-  subscribeLazyload (urn, parentColumn, timeout) {
-    const options = { target: 'lazyload',
-                      urn: urn,
-                      parent_column: parentColumn };
 
     return this._sendAsync(this._secondary, 'SUBSCRIBE', options, undefined, timeout);
   }
@@ -1457,6 +1449,10 @@ export class CasperSocket extends HTMLElement {
 
   collapseLazyload (urn, parentId, timeout) {
     return this._sendAsync(this._secondary, 'GET', { target: 'lazyload', urn: urn, active_id: parentId, action: 'collapse' }, undefined, timeout);
+  }
+
+  getIndexLazyload (urn, id, timeout) {
+    return this._sendAsync(this._secondary, 'GET', { target: 'lazyload', urn: urn, active_id: id, action: 'get_index' }, undefined, timeout);
   }
 
   getLazyload (urn, data, timeout,) {
