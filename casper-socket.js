@@ -1428,7 +1428,7 @@ export class CasperSocket extends HTMLElement {
                       urn: urn,
                       parent_column: data.parentColumn,
                       id_column: data.idColumn,
-                      table_type: data.tableType,
+                      table_schema: data.tableSchema,
                       table_name: data.tableName };
 
     return this._sendAsync(this._secondary, 'SUBSCRIBE', options, undefined, timeout);
