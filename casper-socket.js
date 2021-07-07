@@ -1428,6 +1428,7 @@ export class CasperSocket extends HTMLElement {
                       urn: urn,
                       parent_column: data.parentColumn,
                       id_column: data.idColumn,
+                      sort_column: data.sortColumn,
                       table_schema: data.tableSchema,
                       table_name: data.tableName };
 
