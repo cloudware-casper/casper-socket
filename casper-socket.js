@@ -1459,10 +1459,10 @@ export class CasperSocket extends HTMLElement {
   getLazyload (urn, data, timeout,) {
     const options = { target: 'lazyload',
                       urn: urn,
+                      action: 'fetch',
                       id_column: data.idColumn,
                       active_id: data.activeId,
-                      direction: data.direction,
-                      action: 'fetch',
+                      ratio: data.ratio,
                       nr_of_items: data.nrOfItems,
                       active_index: data.activeIndex,
                       jsonapi: true };
