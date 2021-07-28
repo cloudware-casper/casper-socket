@@ -86,6 +86,7 @@ export class CasperSocket extends HTMLElement {
     this._port = this.getAttribute('port') || window.location.port;
     /* Path or route that connects to casper-epaper module */
     this._path = this.getAttribute('path') || 'epaper';
+    this._version = this._path === 'epaper' ? 1.0 : 2.0;
     /* Default timeout for server requests in seconds */
     this._defaultTimeout = parseInt(this.getAttribute('default-timeout') || '10');
     /* Time in seconds the web socket is kept open after the user becomes idle, must be less than sessionRenewTolerance */
@@ -591,6 +592,10 @@ export class CasperSocket extends HTMLElement {
   }
 
   setTextT (id, value, motion, final) {
+    if ( this._version === 2) {
+      throw new Error("Invalid call to setTextT");
+    }
+
     const params = { input: { text: value, final_update: final } };
     if (motion) {
       params.input.motion = motion;
@@ -598,8 +603,8 @@ export class CasperSocket extends HTMLElement {
     return this._sendAsync(true, 'SET', { target: 'document', id: id }, params, -1);
   }
 
-  sendClick (id, x, y) {
-    return this._sendAsync(true, 'SET', { target: 'document', id: id }, { input: { click: { x: x, y: y } } });
+  sendClick (id, x, y, text) {
+    return this._sendAsync(true, 'SET', { target: 'document', id: id }, { input: { text: text, click: { x: x, y: y } } });
   }
 
   gotoPage (id, pageNumber) {
@@ -1119,7 +1124,7 @@ export class CasperSocket extends HTMLElement {
     this._startIdleTimer();
     if (this._accessValidity !== undefined && this._secondary === false) {
       const now = new Date().valueOf() / 1000;
-      if (true) {
+      if (false) {
         console.log('TTL is ~', this._accessValidity - now);
       }
       if (this._accessToken && (this._accessValidity - now < this._sessionRenewTolerance)) {
