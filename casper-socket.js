@@ -1137,7 +1137,7 @@ export class CasperSocket extends HTMLElement {
         } catch (e) {
           console.log(e);
         }
-        if (true) {
+        if (false) {
           console.log('NEW TTL is ~', this._accessValidity - now);
         }
       }
