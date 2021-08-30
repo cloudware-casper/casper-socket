@@ -209,6 +209,9 @@ export class CasperSocket extends HTMLElement {
     job['user_email'] = null;
     job['role_mask'] = null;
     job['module_mask'] = null;
+    job['product'] = null;
+    job['brand'] = null;
+
     if (options != undefined && options.ttr) {
       job['ttr'] = options.ttr;
     }
