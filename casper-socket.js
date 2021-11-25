@@ -1222,6 +1222,8 @@ export class CasperSocket extends HTMLElement {
   checkIfSessionChanged () {
     if (this._secondary === false) {
       if (this._accessToken !== undefined && this._accessToken !== this.sessionCookie) {
+        console.enable();
+        console.log(`***** hikes shooting my self in the foot @${window.location.href}`);
         window.location.reload();
       } else {
         this._startIdleTimer();
