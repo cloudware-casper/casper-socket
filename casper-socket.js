@@ -474,6 +474,11 @@ export class CasperSocket extends HTMLElement {
    * @param {Object} body the payload to send on the put request, must have a known 'action'
    */
   async switchViaBridge (body) {
+    // ... clear the internal access token while we switch, note this is needed to
+    //     avoid a spurious session change detection by #checkIfSessionChanged() ...
+    const oldAccessToken = this._accessToken;
+    this._accessToken = undefined;
+
     try {
       let response;
 
@@ -522,6 +527,10 @@ export class CasperSocket extends HTMLElement {
           return sessionResponse;
       }
     } catch (e) {
+      // ... if we failed to switch restore the old accessToken ...
+      this._accessToken = oldAccessToken;
+
+      // ... present the error to the user ...
       if (e.status_code === 504) {
         this._showOverlay({ message: 'Tempo de espera ultrapassado', icon: 'timeout' });
       } else {
