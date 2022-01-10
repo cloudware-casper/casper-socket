@@ -978,7 +978,7 @@ export class CasperSocket extends HTMLElement {
               // Unknown message ignore
               console.error('casper protocol decoding error!!!');
             }
-            if (!(payload.channel && timerId && (!payload.status || ['in-progress', 'queued'].includes(payload.status.status)))) {
+            if (!(payload.channel && timerId && (!payload.status || ['in-progress', 'queued', 'reset'].includes(payload.status.status)))) {
               // ... release the invoke ...
               if (timerId) {
                 clearTimeout(timerId);
