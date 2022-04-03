@@ -1044,7 +1044,7 @@ export class CasperSocket extends HTMLElement {
       if (false) {
         this._freeInvokeId(invokeId); // do not recycle this ID it's lost for the duration of the socket life
       }
-      if (request.hideTimeout === true) {
+      if (request.options?.hideTimeout === true || request.hideTimeout === true) {
         handled = true;
       }
     }
