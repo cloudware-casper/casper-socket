@@ -898,7 +898,7 @@ export class CasperSocket extends HTMLElement {
       invokeId = parseInt(data);
       if (!isNaN(invokeId)) {
         const offset = invokeId.toString().length;
-        if (data.substring(offset, offset + 3) === ':D:' || data.substring(offset, offset + 3) === ':n:') {
+        if (data.substring(offset, offset + 3) === ':D:' || data.substring(offset, offset + 3) === ':n:' || data.substring(offset, offset + 3) === ':J:' ) {
           const documentHandler = this._documents.get(invokeId);
           if (documentHandler) {
             documentHandler(data.substring(offset + 1));
