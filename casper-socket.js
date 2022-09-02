@@ -545,8 +545,12 @@ export class CasperSocket extends HTMLElement {
   //                                                                                       //
   //***************************************************************************************//
 
-  registerDocumentHandler (docmentId, documentHandler) {
-    this._documents.set(docmentId, documentHandler);
+  registerDocumentHandler (documentId, documentHandler) {
+    this._documents.set(documentId, documentHandler);
+  }
+
+  unregisterDocumentHandler (documentId) {
+    this._documents.delete(documentId);
   }
 
   /**
@@ -629,6 +633,17 @@ export class CasperSocket extends HTMLElement {
 
   setEditable (id, editable) {
     return this._sendAsync(true, 'SET', { target: 'document', id: id }, { properties: { editable: editable } });
+  }
+
+  /**
+   * Requests the server side link information related to a clicked element
+   *
+   * @param {number} id document identifier
+   * @param {number} x coordinate where the mouse is overing
+   * @param {number} y coordinate where the mouse is overing
+   */
+  getLink (id, x, y) {
+    return this._sendAsync(true, 'GET', { target: 'document', id: id }, { link: { x: 1.0 * x.toFixed(2), y: 1.0 * y.toFixed(2) } });
   }
 
   /**
