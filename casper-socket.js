@@ -636,6 +636,16 @@ export class CasperSocket extends HTMLElement {
   }
 
   /**
+   * Request all hints of the page
+   * 
+   * @param  {number} id document identifier id 
+   * @returns the request promise
+   */
+  getPageHints (id) {
+    return this._sendAsync(true, 'GET', { target: 'document', id: id }, { hints: {} });
+  }
+
+  /**
    * Requests the server side link information related to a clicked element
    *
    * @param {number} id document identifier
@@ -652,9 +662,10 @@ export class CasperSocket extends HTMLElement {
    * @param {number} id document identifier
    * @param {number} x coordinate where the mouse is overing
    * @param {number} y coordinate where the mouse is overing
+   * @returns the request promise
    */
   getHint (id, x, y) {
-    return this._sendAsync(false /* TODO CHECK*/, 'GET', { target: 'document', id: id }, { hint: { x: 1.0 * x.toFixed(2), y: 1.0 * y.toFixed(2) } });
+    return this._sendAsync(true, 'GET', { target: 'document', id: id }, { hint: { x: 1.0 * x.toFixed(2), y: 1.0 * y.toFixed(2) } });
   }
 
   getBandDri (id, bandType, bandIdx) {
@@ -916,7 +927,7 @@ export class CasperSocket extends HTMLElement {
         if (data.substring(offset, offset + 3) === ':D:' || data.substring(offset, offset + 3) === ':n:' || data.substring(offset, offset + 3) === ':J:' ) {
           const documentHandler = this._documents.get(invokeId);
           if (documentHandler) {
-            documentHandler(data.substring(offset + 1));
+            documentHandler(data.substring(offset + 1), invokeId);
           }
         } else {
           request = this._activeRequests.get(invokeId);
