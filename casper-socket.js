@@ -377,7 +377,7 @@ export class CasperSocket extends HTMLElement {
             window.localStorage.setItem('casper-last-entity-id', response.entity_id);
 
             // add internal subscription
-            this.subscribeNotifications('entity-push-events', response.entity_id, (notification) => {
+            this.subscribeNotifications('entity-push-events', undefined, (notification) => {
               this.dispatchEvent(new CustomEvent(notification.event, {
                 detail: notification.detail,
                 bubbles: true,
@@ -712,7 +712,8 @@ export class CasperSocket extends HTMLElement {
         }
       }.bind(this)
     };
-    const options = { target: 'notifications', channel: channel };
+    const chid = channel.split(':');
+    const options = { target: 'notifications', channel: chid[0], id: chid[1] || '<entity_id>' };
     if (this._socket === undefined) {
       await this._setSessionAsync(this.sessionCookie);
     }
@@ -751,7 +752,7 @@ export class CasperSocket extends HTMLElement {
     if (this._socket === undefined) {
       await this._setSessionAsync(this.sessionCookie);
     }
-    this._socket.send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id }));
+    this._socket.send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id || '<entity_id>' }));
     this._activeRequests.set(ivk, request);
     this._subscriptions.set(chn, { handler: handler, timer: tid, invokeId: ivk, confirmed: false, notification: true });
   }
