@@ -377,7 +377,7 @@ export class CasperSocket extends HTMLElement {
             window.localStorage.setItem('casper-last-entity-id', response.entity_id);
 
             // add internal subscription
-            this.subscribeNotifications('entity-push-events', undefined, (notification) => {
+            this.subscribeNotifications('entity-push-events', response.entity_id, (notification) => {
               this.dispatchEvent(new CustomEvent(notification.event, {
                 detail: notification.detail,
                 bubbles: true,
@@ -712,8 +712,8 @@ export class CasperSocket extends HTMLElement {
         }
       }.bind(this)
     };
-    const chid = channel.split(':');
-    const options = { target: 'notifications', channel: chid[0], id: chid[1] || '<entity_id>' };
+    const cid = this._sanitizeChannelAndId(channel);
+    const options = { target: 'notifications', channel: cid.channel, id: cid.id };
     if (this._socket === undefined) {
       await this._setSessionAsync(this.sessionCookie);
     }
@@ -752,7 +752,8 @@ export class CasperSocket extends HTMLElement {
     if (this._socket === undefined) {
       await this._setSessionAsync(this.sessionCookie);
     }
-    this._socket.send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: channel, id: id || '<entity_id>' }));
+    const cid = this._sanitizeChannelAndId(channel, id);
+    this._socket.send(ivk + ':SUBSCRIBE:' + JSON.stringify({ target: 'notifications', channel: cid.channel, id: cid.id }));
     this._activeRequests.set(ivk, request);
     this._subscriptions.set(chn, { handler: handler, timer: tid, invokeId: ivk, confirmed: false, notification: true });
   }
@@ -781,7 +782,8 @@ export class CasperSocket extends HTMLElement {
   }
 
   _unsubscribeNotifications (channel, id) {
-    return this._sendAsync(false, 'UNSUBSCRIBE', { target: 'notifications', channel: channel, id: id });
+    const cid = this._sanitizeChannelAndId(channel, id);
+    return this._sendAsync(false, 'UNSUBSCRIBE', { target: 'notifications', channel: cid.channel, id: cid.id });
   }
 
   async getData (urn, timeout, callback) {
@@ -1512,6 +1514,20 @@ export class CasperSocket extends HTMLElement {
                       jsonapi: true };
 
     return this._sendAsync(this._secondary, 'GET', options, undefined, timeout);
+  }
+
+  _sanitizeChannelAndId (channel, id) {
+    if ( ! id ) {
+      const t = channel.split(':');
+      channel = t[0];
+      id = t[1];
+    }
+    if (['entity-push-events', 'company', 'company-resources'].includes(channel) ) {
+      id = '<entity_id>';
+    } else if (channel === 'server' ) {
+      id = '<messages>';
+    }
+    return { channel, id};
   }
 }
 
