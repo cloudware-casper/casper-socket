@@ -1529,6 +1529,23 @@ export class CasperSocket extends HTMLElement {
     }
     return { channel, id};
   }
+
+  //
+  // ====
+  //
+  /**
+   * New document template - for designer context
+   */
+   newDocument (chapterModel) {
+    // TODO REMOVE FROM HERE WHEN PAPER IS UNIFIED
+    if (app.session_data.app.certified_software_notice !== undefined) {
+      chapterModel.overridable_system_variables = {
+        CERTIFIED_SOFTWARE_NOTICE: app.session_data.app.certified_software_notice
+      };
+      chapterModel.vrxml = { source: chapterModel.jrxml, destination: chapterModel.jrxml };
+    }
+    return this._sendAsync(true, 'NEW', { target: 'document' }, chapterModel);
+  }
 }
 
 window.customElements.define('casper-socket', CasperSocket);
