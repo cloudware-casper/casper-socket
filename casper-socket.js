@@ -1240,7 +1240,7 @@ export class CasperSocket extends HTMLElement {
         console.log(e);
       } finally {
         this._applicationInactive = true;
-        this._showOverlay({ message: 'Sessão suspensa por inatividade', icon: 'cloud', opacity: 0.15 });
+        this._showOverlay({ message: 'Sessão suspensa por inatividade', icon: 'cloud', opacity: 0.35 });
         this._silentDisconnect = true;
         this.disconnect();
       }
